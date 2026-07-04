@@ -328,6 +328,12 @@ def git_push(week_label):
     if not (SCRIPT_DIR / ".git").exists():
         print("⚠️  尚未初始化 Git 仓库，跳过推送。请先按 README 完成 GitHub 首次部署。")
         return False
+    # 检查是否已配置远程仓库
+    remotes = run(["git", "remote"])
+    if not (r_stdout := (remotes.stdout or "").strip()):
+        print("⚠️  尚未配置 GitHub 远程仓库，跳过推送。")
+        print("   请先按 README.md「首次部署」把项目推到 GitHub，之后每周双击即可自动更新。")
+        return False
     run(["git", "add", "data.json"])
     run(["git", "commit", "-m", f"更新数据 {week_label}"])
     r = run(["git", "push"])
