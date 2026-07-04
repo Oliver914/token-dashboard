@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI模型 Tokens 消耗数据库 · 天风计算机</title>
+  <meta name="description" content="天风计算机 · AI模型 Tokens 出海消耗周度看板" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <!-- 顶部品牌渐变线 -->
+  <div class="brand-line"></div>
+
+  <main class="container">
+
+    <!-- ===== 顶部标题栏 ===== -->
+    <header class="hero">
+      <div class="hero-left">
+        <div class="logo-mark">
+          <span class="logo-dot"></span>
+          <span class="logo-text">T</span>
+        </div>
+        <div class="hero-title">
+          <h1 id="pageTitle">AI模型 Tokens 消耗数据库</h1>
+          <p class="hero-sub" id="pageSub">天风计算机 · 缪欣君团队</p>
+        </div>
+      </div>
+      <div class="hero-right">
+        <div class="fresh-tag" id="freshTag">
+          <span class="pulse-dot"></span>
+          <span id="freshText">每周更新 · 已最新</span>
+        </div>
+        <div class="period-tag" id="periodTag">数据周期 —</div>
+      </div>
+    </header>
+
+    <!-- ===== 本周总结 ===== -->
+    <section class="summary-card reveal">
+      <div class="section-label">本周总结</div>
+      <div class="summary-body" id="summaryBody">
+        <!-- JS 注入 -->
+      </div>
+    </section>
+
+    <!-- ===== 3 个 KPI 卡片 ===== -->
+    <section class="kpi-row reveal">
+      <div class="kpi-card">
+        <div class="kpi-label" id="kpi0Label">—</div>
+        <div class="kpi-value" id="kpi0Value">—</div>
+        <div class="kpi-trend" id="kpi0Trend">—</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label" id="kpi1Label">—</div>
+        <div class="kpi-value accent" id="kpi1Value">—</div>
+        <div class="kpi-trend" id="kpi1Trend">—</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label" id="kpi2Label">—</div>
+        <div class="kpi-value" id="kpi2Value">—</div>
+        <div class="kpi-trend" id="kpi2Trend">—</div>
+      </div>
+    </section>
+
+    <!-- ===== 模块 1：总消耗曲线 ===== -->
+    <section class="module reveal">
+      <div class="module-head">
+        <div>
+          <h2 class="module-title" id="m0Title">模块1</h2>
+          <p class="module-comment" id="m0Comment">—</p>
+        </div>
+      </div>
+      <div class="chart-wrap">
+        <div id="chartTotal" class="chart" style="height:380px"></div>
+      </div>
+    </section>
+
+    <!-- ===== 模块 2：前 10 排名 ===== -->
+    <section class="module reveal">
+      <div class="module-head">
+        <div>
+          <h2 class="module-title" id="m1Title">模块2</h2>
+          <p class="module-comment" id="m1Comment">—</p>
+        </div>
+      </div>
+      <div class="rank-grid" id="rankGrid">
+        <!-- JS 注入 10 张卡片 -->
+      </div>
+    </section>
+
+    <!-- ===== 模块 3：国产份额 ===== -->
+    <section class="module reveal">
+      <div class="module-head">
+        <div>
+          <h2 class="module-title" id="m2Title">模块3</h2>
+          <p class="module-comment" id="m2Comment">—</p>
+        </div>
+      </div>
+      <div class="chart-grid two">
+        <div class="chart-wrap">
+          <div id="chartDomTotal" class="chart" style="height:340px"></div>
+        </div>
+        <div class="chart-wrap">
+          <div id="chartShare" class="chart" style="height:340px"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== 模块 4：各国产模型明细 ===== -->
+    <section class="module reveal">
+      <div class="module-head">
+        <div>
+          <h2 class="module-title" id="m3Title">模块4</h2>
+          <p class="module-comment" id="m3Comment">—</p>
+        </div>
+      </div>
+      <div class="chart-grid model-grid" id="modelGrid">
+        <!-- JS 注入 7 个小图 -->
+      </div>
+    </section>
+
+    <!-- ===== 页脚 ===== -->
+    <footer class="footer">
+      <div class="footer-line"></div>
+      <div class="footer-text" id="footerText">—</div>
+      <div class="footer-meta" id="genMeta">—</div>
+    </footer>
+
+  </main>
+
+  <!-- ECharts（离线可备用本地副本，默认走 CDN） -->
+  <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+  <script src="js/dashboard.js"></script>
+</body>
+</html>

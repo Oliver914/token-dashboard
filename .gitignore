@@ -1,0 +1,17 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Python
+__pycache__/
+*.pyc
+
+# 编辑器
+.vscode/
+.idea/
+*.swp
+
+# 本地解密的临时 Excel（update.py 解密后只在内存中处理，这里仅作保护）
+*.tmp.xlsx
+/tmp/*.xlsx
