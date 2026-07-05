@@ -498,10 +498,11 @@ function setupTotalEvents() {
 }
 function readTotalFromTable() {
   const trs = document.querySelectorAll('#totalBody tr');
+  if (!trs.length) return state.total_history || {dates:[],values:[],wow:[]};
   return {
-    dates: Array.from(trs).map(tr => tr.querySelector('.d-date').value.trim()),
-    values: Array.from(trs).map(tr => { const v = parseFloat(tr.querySelector('.d-val').value); return isNaN(v)?null:v; }),
-    wow: Array.from(trs).map(tr => { const v = parseFloat(tr.querySelector('.d-wow').value); return isNaN(v)?null:v; })
+    dates: Array.from(trs).map(tr => { const el = tr.querySelector('.d-date'); return el ? el.value.trim() : ''; }),
+    values: Array.from(trs).map(tr => { const el = tr.querySelector('.d-val'); const v = el ? parseFloat(el.value) : NaN; return isNaN(v)?null:v; }),
+    wow: Array.from(trs).map(tr => { const el = tr.querySelector('.d-wow'); const v = el ? parseFloat(el.value) : NaN; return isNaN(v)?null:v; })
   };
 }
 
@@ -994,9 +995,20 @@ function drawSnapshotCharts(w, d) {
     axisLine:{lineStyle:{color:'#eee'}}, axisTick:{show:false},
     axisLabel:{color:'#999',fontSize:9,rotate:30,hideOverlap:true}
   };
+  // 快照图表统一关闭动画：setOption 后数据立即是最终状态，
+  // 避免 html2canvas 在动画进行中截图导致折线/柱子不完整。
+  const NO_ANIM = { animation: false, animationDuration: 0, animationDurationUpdate: 0 };
+  // 在新窗口里初始化图表（关闭动画），返回实例
+  function initChart(id) {
+    const el = w.document.getElementById(id);
+    if (!el) return null;
+    return E.init(el);
+  }
+
   // 模块1 总消耗
-  if (d.total_history && d.total_history.dates.length && w.document.getElementById('snap_chart_total')) {
-    E.init(w.document.getElementById('snap_chart_total')).setOption({
+  if (d.total_history && d.total_history.dates.length) {
+    const c = initChart('snap_chart_total');
+    if (c) c.setOption(Object.assign({
       grid:{left:35,right:40,top:24,bottom:50},
       tooltip:{trigger:'axis'},
       xAxis:{type:'category',data:d.total_history.dates,...baseAxis},
@@ -1005,45 +1017,44 @@ function drawSnapshotCharts(w, d) {
       series:[{type:'bar',data:d.total_history.values,barWidth:'55%',
         itemStyle:{borderRadius:[3,3,0,0],color:{type:'linear',x:0,y:0,x2:0,y2:1,colorStops:[{offset:0,color:'#ED7D31'},{offset:1,color:'#f7c9ad'}]}}},
         {type:'line',yAxisIndex:1,data:d.total_history.wow,smooth:true,symbol:'none',lineStyle:{color:'#333'}}]
-    });
+    }, NO_ANIM));
   }
   // 模块3 国产总量 + 份额
   const dom = d.domestic;
   if (dom && dom.dates.length) {
-    if (w.document.getElementById('snap_chart_domtotal')) {
-      E.init(w.document.getElementById('snap_chart_domtotal')).setOption({
-        grid:{left:35,right:40,top:20,bottom:50},tooltip:{trigger:'axis'},
-        xAxis:{type:'category',data:dom.dates,...baseAxis},
-        yAxis:[{type:'value',splitLine:{lineStyle:{color:'#f0f0f0'}},axisLabel:{color:'#999',fontSize:9}},{type:'value',splitLine:{show:false},axisLabel:{show:false}}],
-        series:[{type:'bar',data:dom.total_T,barWidth:'55%',itemStyle:{borderRadius:[3,3,0,0],color:'#5AD8A6'}},
-                {type:'line',yAxisIndex:1,data:dom.total_wow,smooth:true,symbol:'none',lineStyle:{color:'#ED7D31'}}]
-      });
-    }
-    if (w.document.getElementById('snap_chart_share')) {
-      E.init(w.document.getElementById('snap_chart_share')).setOption({
-        grid:{left:35,right:20,top:20,bottom:50},tooltip:{trigger:'axis'},
-        xAxis:{type:'category',data:dom.dates,...baseAxis},
-        yAxis:{type:'value',axisLabel:{color:'#999',fontSize:9,formatter:'{value}%'},splitLine:{lineStyle:{color:'#f0f0f0'}}},
-        series:[{type:'line',data:dom.share,smooth:true,symbol:'none',lineStyle:{color:'#ED7D31',width:2.5},
-          areaStyle:{color:{type:'linear',x:0,y:0,x2:0,y2:1,colorStops:[{offset:0,color:'rgba(237,125,49,.2)'},{offset:1,color:'rgba(237,125,49,0)'}]}},
-          markLine:{symbol:'none',silent:true,data:[{yAxis:50,lineStyle:{color:'#bbb',type:'dashed'},label:{formatter:'50%',color:'#999',fontSize:9}}]}}]
-      });
-    }
+    const c1 = initChart('snap_chart_domtotal');
+    if (c1) c1.setOption(Object.assign({
+      grid:{left:35,right:40,top:20,bottom:50},tooltip:{trigger:'axis'},
+      xAxis:{type:'category',data:dom.dates,...baseAxis},
+      yAxis:[{type:'value',splitLine:{lineStyle:{color:'#f0f0f0'}},axisLabel:{color:'#999',fontSize:9}},{type:'value',splitLine:{show:false},axisLabel:{show:false}}],
+      series:[{type:'bar',data:dom.total_T,barWidth:'55%',itemStyle:{borderRadius:[3,3,0,0],color:'#5AD8A6'}},
+              {type:'line',yAxisIndex:1,data:dom.total_wow,smooth:true,symbol:'none',lineStyle:{color:'#ED7D31'}}]
+    }, NO_ANIM));
+
+    const c2 = initChart('snap_chart_share');
+    if (c2) c2.setOption(Object.assign({
+      grid:{left:35,right:20,top:20,bottom:50},tooltip:{trigger:'axis'},
+      xAxis:{type:'category',data:dom.dates,...baseAxis},
+      yAxis:{type:'value',axisLabel:{color:'#999',fontSize:9,formatter:'{value}%'},splitLine:{lineStyle:{color:'#f0f0f0'}}},
+      series:[{type:'line',data:dom.share,smooth:true,symbol:'none',lineStyle:{color:'#ED7D31',width:2.5},
+        areaStyle:{color:{type:'linear',x:0,y:0,x2:0,y2:1,colorStops:[{offset:0,color:'rgba(237,125,49,.2)'},{offset:1,color:'rgba(237,125,49,0)'}]}},
+        markLine:{symbol:'none',silent:true,data:[{yAxis:50,lineStyle:{color:'#bbb',type:'dashed'},label:{formatter:'50%',color:'#999',fontSize:9}}]}}]
+    }, NO_ANIM));
   }
   // 模块4 各厂商
   if (dom && dom.models) {
     const palette = ['#ED7D31','#5B8FF9','#5AD8A6','#F6BD16','#E86452','#6DC8EC','#945FB9','#3FB8AF'];
     Object.keys(dom.models).forEach((m,i) => {
-      const el = w.document.getElementById('snap_chart_model_'+i);
-      if (!el) return;
+      const c = initChart('snap_chart_model_'+i);
+      if (!c) return;
       const md = dom.models[m];
-      E.init(el).setOption({
+      c.setOption(Object.assign({
         grid:{left:32,right:32,top:10,bottom:30},tooltip:{trigger:'axis'},
         xAxis:{type:'category',data:dom.dates,axisLine:{lineStyle:{color:'#eee'}},axisTick:{show:false},axisLabel:{show:false}},
         yAxis:[{type:'value',splitLine:{lineStyle:{color:'#f4f4f4'}},axisLabel:{color:'#aaa',fontSize:8}},{type:'value',splitLine:{show:false},axisLabel:{show:false}}],
         series:[{type:'bar',data:md.values_T,barWidth:'55%',itemStyle:{borderRadius:[3,3,0,0],color:palette[i%palette.length]}},
                 {type:'line',yAxisIndex:1,data:md.wow,smooth:true,symbol:'none',lineStyle:{color:'#bbb',width:1.5,type:'dashed'}}]
-      });
+      }, NO_ANIM));
     });
   }
 }
@@ -1090,7 +1101,14 @@ function applySnapshotStyles(w) {
 function captureSnapshot(w) {
   const node = w.document.getElementById('snapshot');
   const dlBtn = w.document.getElementById('dlBtn');
-  html2canvas(node, { scale: 2, backgroundColor: '#ffffff', useCORS: true, logging: false }).then(canvas => {
+  // 先等字体加载完成（中文字体从 CDN 加载较慢，避免截图时字形未就绪）
+  const fontsReady = (w.document.fonts && w.document.fonts.ready) ? w.document.fonts.ready : Promise.resolve();
+  fontsReady.then(() => {
+    // 再额外等一帧，确保 ECharts 无动画渲染 + 字形完全绘制
+    return new Promise(r => w.requestAnimationFrame(() => w.requestAnimationFrame(r)));
+  }).then(() => {
+    return html2canvas(node, { scale: 2, backgroundColor: '#ffffff', useCORS: true, logging: false });
+  }).then(canvas => {
     const img = canvas.toDataURL('image/png');
     // 显示预览
     const area = w.document.getElementById('previewArea');
