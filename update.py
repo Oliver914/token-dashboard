@@ -440,12 +440,15 @@ def push_to_firebase(data):
     settings = {"updated_at": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 "admin_user": "admin"}
     base = db_url.rstrip("/") + "/"
-    for key, payload in [("content", content), ("charts", charts), ("settings", settings)]:
+    # content 和 charts 用 PUT（整体覆盖）；settings 用 PATCH（合并，避免冲掉 view_password 等已有字段）
+    for key, payload, method in [("content", content, "PUT"),
+                                  ("charts", charts, "PUT"),
+                                  ("settings", settings, "PATCH")]:
         body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
         req = urllib.request.Request(base + key + ".json",
                                      data=body,
                                      headers={"Content-Type": "application/json"},
-                                     method="PUT")
+                                     method=method)
         try:
             with urllib.request.urlopen(req, timeout=20) as resp:
                 resp.read()

@@ -33,7 +33,7 @@ const DataStore = (() => {
         firebaseReady = true;
         // 监听数据变化
         db.ref('/').on('value', snap => {
-          cache = snap.val() || {};
+          cache = flattenCloudData(snap.val() || {});
           listeners.forEach(cb => cb(cache));
         });
         return true;
@@ -65,7 +65,7 @@ const DataStore = (() => {
   async function load() {
     if (firebaseReady) {
       const snap = await db.ref('/').get();
-      cache = snap.val() || {};
+      cache = flattenCloudData(snap.val() || {});
       return cache;
     }
     // 本地：先 localStorage，没有则 fetch data.json（首次访问）
@@ -84,13 +84,40 @@ const DataStore = (() => {
     }
   }
 
+  /* ---------- 结构归一化 ----------
+     Firebase 存的是嵌套结构 {content:{...}, charts:{...}, settings:{...}}，
+     前端期望扁平结构 {title, summary, kpi, ..., total_history, domestic, settings}。
+     本函数把云端数据摊平成前端可用的形式。data.json 已是扁平的，原样返回。
+  --------------------------------------------------------- */
+  function flattenCloudData(d) {
+    if (!d) return normalizeStructure({});
+    // 如果根级就有 title（data.json 扁平结构），直接返回
+    if (d.title || d.summary || d.kpi) return d;
+    // 否则是云端嵌套结构，把 content 摊到根级
+    const content = d.content || {};
+    return {
+      ...content,
+      charts: d.charts,
+      total_history: d.charts && d.charts.total_history,
+      domestic: d.charts && d.charts.domestic,
+      settings: d.settings || { updated_at: nowStr() },
+      meta: content.meta || { updated_at: nowStr() }
+    };
+  }
+
   /* ---------- 保存 ---------- */
   async function save(content) {
     if (!cache) cache = {};
     cache = { ...cache, ...content, settings: { ...(cache.settings||{}), updated_at: nowStr() } };
     if (firebaseReady) {
-      await db.ref('content').set(cache.content);
+      // 把扁平字段重新打包成 content 节点写入云端
+      const contentNode = {
+        title: cache.title, summary: cache.summary, kpi: cache.kpi,
+        modules: cache.modules, top10: cache.top10, footer: cache.footer, meta: cache.meta
+      };
+      await db.ref('content').set(contentNode);
       await db.ref('settings').set(cache.settings);
+      cache.content = contentNode; // 同步内存，避免下次 flatten 出错
     } else {
       saveLocal(cache);
       listeners.forEach(cb => cb(cache));
@@ -101,7 +128,7 @@ const DataStore = (() => {
     if (!cache) cache = {};
     cache = { ...cache, charts, settings: { ...(cache.settings||{}), updated_at: nowStr() } };
     if (firebaseReady) {
-      await db.ref('charts').set(cache.charts);
+      await db.ref('charts').set(charts);
       await db.ref('settings').set(cache.settings);
     } else {
       saveLocal(cache);
