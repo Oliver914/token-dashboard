@@ -76,12 +76,14 @@ function showViewGate() {
     <div class="gate-card">
       <div class="logo-mark"><span class="logo-dot"></span><span class="logo-text">T</span></div>
       <h1 class="gate-title">Token 出海数据库</h1>
+      <p class="gate-team">【天风计算机 缪欣君/刘鉴团队】</p>
       <p class="gate-sub">请输入访问密码</p>
       <form id="gateForm" class="gate-form">
         <input type="password" id="gatePwd" placeholder="访问密码" autocomplete="off" autofocus />
         <div id="gateError" class="gate-error"></div>
         <button type="submit" class="btn btn-primary btn-block">进 入</button>
       </form>
+      <p class="gate-note">密码请询问天风计算机团队成员或对口销售</p>
     </div>`;
   document.body.appendChild(gate);
   document.getElementById('gateForm').addEventListener('submit', (e) => {
