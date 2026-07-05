@@ -39,14 +39,11 @@
   /* 品牌橙色 */
   const ORANGE = 'ED7D31';
 
-  /* 厂商顺序：优先用 models-config.js 的配置；动态合并 data 里实际存在的厂商
-     （保证新加的厂商即使没及时更新配置也能被导出） */
-  const MODEL_ORDER = (() => {
+  /* 厂商默认顺序：从 models-config.js 读取（模块顶层，此时还没有 data）。
+     具体导出时会在函数内动态合并实际存在的厂商。 */
+  const DEFAULT_MODEL_ORDER = (() => {
     const configured = (typeof getModelNames === 'function') ? getModelNames() : [];
-    const actual = (data && data.domestic && data.domestic.models) ? Object.keys(data.domestic.models) : [];
-    const merged = [...configured];
-    actual.forEach(m => { if (!merged.includes(m)) merged.push(m); });
-    return merged.length ? merged : ['DeepSeek', 'Qwen', 'Kimi', 'GLM', 'Minimax', '小米', '腾讯'];
+    return configured.length ? configured : ['DeepSeek', 'Qwen', 'Kimi', 'GLM', 'Minimax', '小米', '腾讯'];
   })();
 
   /* ---------- 小工具 ---------- */
@@ -289,6 +286,12 @@
     const totalWow = Array.isArray(dom.total_wow) ? dom.total_wow : [];
     const globalT = Array.isArray(dom.global_T) ? dom.global_T : [];
     const share = Array.isArray(dom.share) ? dom.share : [];
+    // 本表用到的厂商顺序：默认配置 + 数据里实际存在的厂商
+    const MODEL_ORDER = (() => {
+      const merged = [...DEFAULT_MODEL_ORDER];
+      Object.keys(models).forEach(m => { if (!merged.includes(m)) merged.push(m); });
+      return merged;
+    })();
 
     // 列布局：
     // 0: 周日期
@@ -377,6 +380,14 @@
         return;
       }
       d = d || {};
+
+      // 动态厂商顺序：默认配置 + 实际数据里存在的厂商（保证新加厂商也能导出）
+      const MODEL_ORDER = (() => {
+        const merged = [...DEFAULT_MODEL_ORDER];
+        const actual = (d.domestic && d.domestic.models) ? Object.keys(d.domestic.models) : [];
+        actual.forEach(m => { if (!merged.includes(m)) merged.push(m); });
+        return merged;
+      })();
 
       const wb = XLSX.utils.book_new();
       wb.Props = {
