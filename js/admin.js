@@ -508,9 +508,9 @@ function renderDomesticTable() {
   const dom = state.domestic;
   const models = Object.keys(dom.models || {});
   const head = document.getElementById('domesticHead');
-  // 表头：周日期 | 各模型值 | 国产总和 | 国产环比 | 全球总和 | 份额
+  // 表头：周日期 | 各模型值(可删) | 国产总和 | 国产环比 | 全球总和 | 份额
   let th = '<tr><th>周日期</th>';
-  models.forEach(m => th += `<th>${escapeHtml(m)}(T)</th>`);
+  models.forEach(m => th += `<th class="th-model" data-model="${escapeAttr(m)}" title="点击 ✕ 删除该厂商列">${escapeHtml(m)}(T) <button class="col-del" data-model="${escapeAttr(m)}" title="删除厂商">✕</button></th>`);
   th += '<th>国产总和</th><th>国产环比%</th><th>全球总和</th><th>份额%</th><th>操作</th></tr>';
   head.innerHTML = th;
   // 行
@@ -533,6 +533,7 @@ function renderDomesticTable() {
 }
 function setupDomesticEvents() {
   const body = document.getElementById('domesticBody');
+  const head = document.getElementById('domesticHead');
   body.addEventListener('input', markDirty);
   body.addEventListener('click', (e) => {
     if (!e.target.closest('.row-del')) return;
@@ -543,6 +544,16 @@ function setupDomesticEvents() {
       state.domestic.models[m].values_T.splice(idx,1);
       state.domestic.models[m].wow.splice(idx,1);
     });
+    renderDomesticTable(); markDirty();
+  });
+  // 删除厂商列（点表头的 ✕）
+  head.addEventListener('click', (e) => {
+    const btn = e.target.closest('.col-del');
+    if (!btn) return;
+    const m = btn.dataset.model;
+    if (!confirm(`删除厂商「${m}」及其所有数据？`)) return;
+    state.domestic = readDomesticFromTable();
+    delete state.domestic.models[m];
     renderDomesticTable(); markDirty();
   });
   document.getElementById('addDomRowBtn').addEventListener('click', () => {
@@ -556,6 +567,23 @@ function setupDomesticEvents() {
       state.domestic.models[m].values_T.push(null);
       state.domestic.models[m].wow.push(null);
     });
+    renderDomesticTable(); markDirty();
+  });
+  // + 厂商：弹框输入名字，新增一列
+  const addModelBtn = document.getElementById('addModelBtn');
+  if (addModelBtn) addModelBtn.addEventListener('click', () => {
+    // 用配置里的预设 + 自定义
+    const configured = (typeof getModelNames === 'function') ? getModelNames() : [];
+    const existing = Object.keys(state.domestic.models);
+    const suggestions = configured.filter(m => !existing.includes(m));
+    let hint = suggestions.length ? `（建议：${suggestions.slice(0,5).join(' / ')}）` : '';
+    const name = prompt('输入新厂商名称' + hint + '\n注意：名称将作为看板小图标题和导出列名。', suggestions[0] || '');
+    if (!name || !name.trim()) return;
+    const nm = name.trim();
+    if (state.domestic.models[nm]) { alert('该厂商已存在'); return; }
+    state.domestic = readDomesticFromTable();
+    const n = state.domestic.dates.length;
+    state.domestic.models[nm] = { values_T: new Array(n).fill(null), wow: new Array(n).fill(null) };
     renderDomesticTable(); markDirty();
   });
 }

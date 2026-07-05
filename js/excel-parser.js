@@ -42,15 +42,17 @@
   /* Excel 文件的固定密码（与 update.py 保持一致） */
   var EXCEL_PASSWORD = 'ainb';
 
-  /* 国产模型的固定名称与读取顺序（与数据生成顺序一致） */
-  var MODEL_ORDER = ['DeepSeek', 'Qwen', 'Kimi', 'GLM', 'Minimax', '小米', '腾讯'];
+  /* 国产模型的固定名称与读取顺序（默认值；实际运行时优先用 models-config.js 的配置） */
+  var MODEL_ORDER = (typeof getModelNames === 'function')
+    ? getModelNames()
+    : ['DeepSeek', 'Qwen', 'Kimi', 'GLM', 'Minimax', '小米', '腾讯'];
 
-  /* 国产明细 sheet 中各模型对应的列位置（1-based，M=13）。
-     每个模型占相邻两列：值列 + 环比列。列定义参照 update.py：
+  /* 国产明细 sheet 中各模型对应的「默认」列位置（1-based，M=13）。
+     仅当表头扫描失败时回退使用。每模型占相邻两列：值列 + 环比列。
        M(13)=周日期；N/O=DeepSeek；P/Q=Qwen；R/S=Kimi；T/U=GLM；
        V/W=Minimax；X/Y=小米；Z/AA=腾讯；
        AB(28)=国产总和；AC(29)=国产环比；AD(30)=全球总和；AE(31)=份额 */
-  var MODEL_COL_MAP = [
+  var DEFAULT_MODEL_COL_MAP = [
     { name: 'DeepSeek', vcol: 14, wcol: 15 },
     { name: 'Qwen',     vcol: 16, wcol: 17 },
     { name: 'Kimi',     vcol: 18, wcol: 19 },
@@ -59,6 +61,41 @@
     { name: '小米',      vcol: 24, wcol: 25 },
     { name: '腾讯',      vcol: 26, wcol: 27 }
   ];
+
+  /* 扫描表头行，动态构建「模型名→列号」映射。
+     优先于 DEFAULT_MODEL_COL_MAP：能识别 models-config 里新加的厂商，
+     也能容忍厂商在 Excel 里换位置。规则：从 M(13) 列往右扫，
+     表头命中某模型（用 matchModelByHeader）→ 该列为值列，下一列为环比列。
+     同时识别汇总列（国产总和/全球总和/份额/各自环比）。
+     返回 { modelMap: [{name,vcol,wcol}], totalCol, totalWowCol, globalCol, shareCol } */
+  function scanHeaderForRowMap(headerRow, dateCol) {
+    var modelMap = [];
+    var totalCol = null, totalWowCol = null, globalCol = null, shareCol = null;
+    if (!headerRow) return null;
+    for (var c = (dateCol || 13) + 1; c < headerRow.length + 2; c++) {
+      var cell = headerRow[c - 1]; // 0-based
+      if (cell === null || cell === undefined || String(cell).trim() === '') continue;
+      var text = String(cell).trim();
+      var low = text.toLowerCase();
+      // 汇总列关键词
+      if (low.indexOf('国产') >= 0 && low.indexOf('总和') >= 0) { totalCol = c; continue; }
+      if (low === '全球总和' || low === '全球') { globalCol = c; continue; }
+      if (low.indexOf('份额') >= 0) { shareCol = c; continue; }
+      // 「环比」作为成对的第二列，跳过（已在配对逻辑里处理）
+      if (low === '环比' || low.indexOf('环比') >= 0) continue;
+      // 模型匹配
+      var matched = (typeof matchModelByHeader === 'function')
+        ? matchModelByHeader(text) : null;
+      if (matched) {
+        // 值列 = c，环比列 = c+1（默认相邻）
+        modelMap.push({ name: matched, vcol: c, wcol: c + 1 });
+      }
+    }
+    // 环比列从「国产总和」的相邻列推断
+    if (totalCol && !totalWowCol) totalWowCol = totalCol + 1;
+    return { modelMap: modelMap, totalCol: totalCol, totalWowCol: totalWowCol,
+             globalCol: globalCol, shareCol: shareCol };
+  }
   var DOM_DATE_COL = 13;   // M 列：周日期
   var DOM_TOTAL_COL = 28;  // AB 列：国产总和（单位：十亿 token）
   var DOM_TOTAL_WOW_COL = 29; // AC 列：国产环比
@@ -305,6 +342,7 @@
       share: [],
       models: {}
     };
+    // 初始化所有配置里的厂商（含新加的），保证输出结构完整
     MODEL_ORDER.forEach(function (m) {
       result.models[m] = { values_T: [], wow: [] };
     });
@@ -313,13 +351,34 @@
     var rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: null });
     if (!rows || !rows.length) return result;
 
+    // ★ 先扫表头（第 1 行）动态建映射，识别新厂商；扫不到回退固定列号
+    var header = rows[0] || [];
+    var scanned = scanHeaderForRowMap(header, DOM_DATE_COL);
+    var useMap, totalCol, totalWowCol, globalCol, shareCol;
+    if (scanned && scanned.modelMap && scanned.modelMap.length > 0) {
+      // 用扫描结果，但补齐 result.models 里缺的厂商
+      useMap = scanned.modelMap;
+      useMap.forEach(function (mc) {
+        if (!result.models[mc.name]) result.models[mc.name] = { values_T: [], wow: [] };
+      });
+      totalCol    = scanned.totalCol    || DOM_TOTAL_COL;
+      totalWowCol = scanned.totalWowCol || DOM_TOTAL_WOW_COL;
+      globalCol   = scanned.globalCol   || DOM_GLOBAL_COL;
+      shareCol    = scanned.shareCol    || DOM_SHARE_COL;
+    } else {
+      // 回退：固定列号
+      useMap = DEFAULT_MODEL_COL_MAP;
+      totalCol = DOM_TOTAL_COL; totalWowCol = DOM_TOTAL_WOW_COL;
+      globalCol = DOM_GLOBAL_COL; shareCol = DOM_SHARE_COL;
+    }
+    // 对于 result.models 里存在、但本次映射没出现的厂商（新加厂商但 Excel 没数据），用 null 填充
+
     var emptyRun = 0;
     // i=0 为表头，从 i=1 开始
     for (var i = 1; i < rows.length; i++) {
       var row = rows[i] || [];
       var dateCell = row[DOM_DATE_COL - 1]; // 0-based 索引
 
-      // 日期列为空：判定为空行，计入空行计数
       if (dateCell === null || dateCell === undefined || String(dateCell).trim() === '') {
         emptyRun++;
         if (emptyRun >= MAX_EMPTY_RUN) break;
@@ -330,18 +389,29 @@
       result.dates.push(formatDate(dateCell));
 
       // 各模型：值 ÷1000 转 T，环比规整为百分比
-      MODEL_COL_MAP.forEach(function (mc) {
+      // 先建一个「本行各模型已填」标记，未命中模型的厂商补 null
+      var filled = {};
+      useMap.forEach(function (mc) {
         var rawVal = row[mc.vcol - 1];
         var rawWow = row[mc.wcol - 1];
+        if (!result.models[mc.name]) result.models[mc.name] = { values_T: [], wow: [] };
         result.models[mc.name].values_T.push(toT(rawVal));
         result.models[mc.name].wow.push(normalizeWow(rawWow));
+        filled[mc.name] = true;
+      });
+      // 配置里有、但本行没数据的厂商补 null（保持各厂商数组长度一致）
+      Object.keys(result.models).forEach(function (mname) {
+        if (!filled[mname]) {
+          result.models[mname].values_T.push(null);
+          result.models[mname].wow.push(null);
+        }
       });
 
       // 国产总和 / 国产环比 / 全球总和 / 份额
-      result.total_T.push(toT(row[DOM_TOTAL_COL - 1]));
-      result.total_wow.push(normalizeWow(row[DOM_TOTAL_WOW_COL - 1]));
-      result.global_T.push(toT(row[DOM_GLOBAL_COL - 1]));
-      result.share.push(normalizeShare(row[DOM_SHARE_COL - 1]));
+      result.total_T.push(toT(totalCol    ? row[totalCol - 1]    : null));
+      result.total_wow.push(normalizeWow(totalWowCol ? row[totalWowCol - 1] : null));
+      result.global_T.push(toT(globalCol ? row[globalCol - 1] : null));
+      result.share.push(normalizeShare(shareCol ? row[shareCol - 1] : null));
     }
     return result;
   }

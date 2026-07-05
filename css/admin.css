@@ -337,6 +337,14 @@
   font-size: 16px; padding: 4px 8px; border-radius: 5px;
 }
 .data-table .row-del:hover { color: #e74c3c; background: #fdecea; }
+.data-table th.th-model { position: relative; white-space: nowrap; }
+.data-table th .col-del {
+  color: #ccc; cursor: pointer; background: none; border: none;
+  font-size: 11px; padding: 0 3px; margin-left: 2px; border-radius: 3px;
+  vertical-align: middle;
+}
+.data-table th .col-del:hover { color: #e74c3c; background: #fdecea; }
+.row-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
 
 /* ---------- Tab ---------- */
 .tabs {

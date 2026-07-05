@@ -33,6 +33,23 @@ DATA_JSON  = SCRIPT_DIR / "data.json"
 
 EXCEL_PASSWORD = "ainb"
 
+# 国产厂商配置（与 js/models-config.js 保持一致；新增厂商时两边都加）
+# name: 显示名；aliases: Excel 表头可能用的别名（小写匹配）
+MODELS_CONFIG = [
+    {"name": "DeepSeek", "aliases": ["deepseek", "ds"]},
+    {"name": "Qwen",     "aliases": ["qwen", "通义", "通义千问"]},
+    {"name": "Kimi",     "aliases": ["kimi", "moonshot"]},
+    {"name": "GLM",      "aliases": ["glm", "智谱", "zhipu", "chatglm"]},
+    {"name": "Minimax",  "aliases": ["minimax", "mini-max"]},
+    {"name": "小米",      "aliases": ["小米", "mimo", "mi-mo", "redmi"]},
+    {"name": "腾讯",      "aliases": ["腾讯", "hy", "hunyuan", "混元"]},
+]
+# 默认列映射（仅当表头扫描失败时回退使用，1-based，M=13 是日期列）
+DEFAULT_MODEL_COLS = [
+    ("DeepSeek", 14, 15), ("Qwen", 16, 17), ("Kimi", 18, 19),
+    ("GLM", 20, 21), ("Minimax", 22, 23), ("小米", 24, 25), ("腾讯", 26, 27),
+]
+
 # ---------- 依赖检查 ----------
 def ensure_deps():
     missing = []
@@ -140,6 +157,18 @@ def parse_wow_text(text):
     up = num >= 0
     return (round(num, 2), up)
 
+def match_model_by_header(text):
+    """用 Excel 表头文字匹配厂商，返回显示名；匹配不到返回 None。
+       表头不区分大小写、去空格（与 js/models-config.js 的 matchModelByHeader 一致）。"""
+    if not text:
+        return None
+    h = str(text).strip().lower()
+    for m in MODELS_CONFIG:
+        cands = [m["name"].lower()] + [a.lower() for a in m.get("aliases", [])]
+        if h in cands:
+            return m["name"]
+    return None
+
 
 # ---------- 3. 抽取「看板」sheet 文字 ----------
 def extract_dashboard_text(wb):
@@ -243,23 +272,45 @@ def extract_total_history(wb):
 
 def extract_domestic(wb):
     """【国内】每天消耗量统计 的周聚合块 (M:AE, 行 2-60)
-       原始单位为「十亿 token」，÷1000 转 T，与总量曲线保持一致。"""
+       原始单位为「十亿 token」，÷1000 转 T，与总量曲线保持一致。
+
+       列映射优先扫描第 1 行表头动态识别（新增厂商只要表头能匹配别名即可自动生效），
+       扫描不到任何模型时回退到 DEFAULT_MODEL_COLS。"""
     name = "【国内】每天消耗量统计"
     if name not in wb.sheetnames:
         return {}
     ws = wb[name]
-    # 列映射：日期 M(13)；模型值/环比成对
-    model_cols = [
-        ("DeepSeek", 14, 15),
-        ("Qwen",     16, 17),
-        ("Kimi",     18, 19),
-        ("GLM",      20, 21),
-        ("Minimax",  22, 23),
-        ("小米",      24, 25),
-        ("腾讯",      26, 27),
-    ]
+
+    # ---- 扫描表头（第 1 行），动态识别列映射 ----
+    model_cols = {}                      # {model_name: (值列, 环比列)}
+    total_vcol, total_wcol = 28, 29      # 默认 AB 国产总和 / AC 环比
+    global_vcol = 30                     # 默认 AD 全球总和
+    share_col = 31                       # 默认 AE 份额
+    max_col = ws.max_column or 0
+    for c in range(14, max_col + 1):
+        h = ws.cell(row=1, column=c).value
+        if h is None:
+            continue
+        m = match_model_by_header(h)
+        if m and m not in model_cols:
+            # 模型值列 = 命中列，环比列 = 紧邻的下一列
+            model_cols[m] = (c, c + 1)
+            continue
+        text = str(h)
+        if "国产" in text and "总和" in text:
+            total_vcol = c
+            total_wcol = c + 1
+        elif "全球" in text:
+            global_vcol = c
+        elif "份额" in text:
+            share_col = c
+    # 至少匹配到一个模型才算扫描成功，否则整体回退默认列
+    if not model_cols:
+        model_cols = {m: (v, w) for (m, v, w) in DEFAULT_MODEL_COLS}
+
+    # 所有配置厂商都出现在输出里（即使该 Excel 无此厂商数据，也按行填 None）
+    models = {m["name"]: {"values_T": [], "wow": []} for m in MODELS_CONFIG}
     dates = []
-    models = {m: {"values_T": [], "wow": []} for m, _, _ in model_cols}
     total_T, total_wow, global_T, share = [], [], [], []
 
     row = 2
@@ -273,16 +324,22 @@ def extract_domestic(wb):
             row += 1
             continue
         dates.append(fmt_date(d))
-        for m, vcol, wcol in model_cols:
-            raw = to_num(ws.cell(row=row, column=vcol).value)
-            models[m]["values_T"].append(round(raw / 1000, 3) if raw is not None else None)
-            models[m]["wow"].append(normalize_wow(ws.cell(row=row, column=wcol).value))
-        tot = to_num(ws.cell(row=row, column=28).value)  # AB 国产总和
+        # 每一行都为全部配置厂商填一格：命中的取值，未命中填 None，保证各模型数组等长
+        for m in models:
+            if m in model_cols:
+                vcol, wcol = model_cols[m]
+                raw = to_num(ws.cell(row=row, column=vcol).value)
+                models[m]["values_T"].append(round(raw / 1000, 3) if raw is not None else None)
+                models[m]["wow"].append(normalize_wow(ws.cell(row=row, column=wcol).value))
+            else:
+                models[m]["values_T"].append(None)
+                models[m]["wow"].append(None)
+        tot = to_num(ws.cell(row=row, column=total_vcol).value)   # 国产总和
         total_T.append(round(tot / 1000, 3) if tot is not None else None)
-        total_wow.append(normalize_wow(ws.cell(row=row, column=29).value))  # AC
-        g = to_num(ws.cell(row=row, column=30).value)  # AD 全球总和
+        total_wow.append(normalize_wow(ws.cell(row=row, column=total_wcol).value))
+        g = to_num(ws.cell(row=row, column=global_vcol).value)    # 全球总和
         global_T.append(round(g / 1000, 3) if g is not None else None)
-        sh = to_num(ws.cell(row=row, column=31).value)  # AE 份额
+        sh = to_num(ws.cell(row=row, column=share_col).value)     # 份额
         share.append(round(sh * 100, 2) if (sh is not None and abs(sh) <= 1) else (sh if sh is not None else None))
         row += 1
         if row > 200:

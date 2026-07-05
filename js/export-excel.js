@@ -39,8 +39,15 @@
   /* 品牌橙色 */
   const ORANGE = 'ED7D31';
 
-  /* 模型固定顺序（与数据生成顺序一致） */
-  const MODEL_ORDER = ['DeepSeek', 'Qwen', 'Kimi', 'GLM', 'Minimax', '小米', '腾讯'];
+  /* 厂商顺序：优先用 models-config.js 的配置；动态合并 data 里实际存在的厂商
+     （保证新加的厂商即使没及时更新配置也能被导出） */
+  const MODEL_ORDER = (() => {
+    const configured = (typeof getModelNames === 'function') ? getModelNames() : [];
+    const actual = (data && data.domestic && data.domestic.models) ? Object.keys(data.domestic.models) : [];
+    const merged = [...configured];
+    actual.forEach(m => { if (!merged.includes(m)) merged.push(m); });
+    return merged.length ? merged : ['DeepSeek', 'Qwen', 'Kimi', 'GLM', 'Minimax', '小米', '腾讯'];
+  })();
 
   /* ---------- 小工具 ---------- */
 
