@@ -423,6 +423,24 @@ def push_to_firebase(data):
         print("⚠️  Firebase 未配置（js/firebase-config.js 里仍是占位符）。")
         print("   请先按 README.md 完成 Firebase 配置。本次只生成 data.json，不写云端。")
         return False
+
+    # Firebase 的数组特性：前导 null/空值会被丢弃，导致数组长度变化、数据错位。
+    # 解决：推送前把数值数组里的 None 替换成 0（前端柱状图里 0 高度 = 视觉无数据）。
+    def sanitize(x):
+        if isinstance(x, list):
+            return [0 if (v is None and _is_numeric_list(x)) else sanitize(v) for v in x]
+        if isinstance(x, dict):
+            return {k: sanitize(v) for k, v in x.items()}
+        return x
+    def _is_numeric_list(lst):
+        # 数组里只要有一个数字实例，就当作数值数组（None 转 0）
+        return any(isinstance(v, (int, float)) for v in lst)
+
+    data_clean = sanitize({
+        "total_history": data.get("total_history"),
+        "domestic": data.get("domestic"),
+    })
+
     # 拆成 content / charts / settings 三块写入
     content = {
         "title": data.get("title"),
@@ -433,10 +451,7 @@ def push_to_firebase(data):
         "footer": data.get("footer"),
         "meta": data.get("meta"),
     }
-    charts = {
-        "total_history": data.get("total_history"),
-        "domestic": data.get("domestic"),
-    }
+    charts = data_clean
     settings = {"updated_at": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 "admin_user": "admin"}
     base = db_url.rstrip("/") + "/"

@@ -128,12 +128,28 @@ const DataStore = (() => {
     if (!cache) cache = {};
     cache = { ...cache, charts, settings: { ...(cache.settings||{}), updated_at: nowStr() } };
     if (firebaseReady) {
-      await db.ref('charts').set(charts);
+      // Firebase 数组会丢弃前导 null，推送前把数值数组里的 null 转成 0
+      await db.ref('charts').set(sanitizeForFirebase(charts));
       await db.ref('settings').set(cache.settings);
     } else {
       saveLocal(cache);
       listeners.forEach(cb => cb(cache));
     }
+  }
+
+  // Firebase 数组特性：前导 null 会被丢弃导致数组错位。
+  // 推送前把数值数组里的 null 转成 0（柱状图里 0 高度 = 视觉无数据）。
+  function sanitizeForFirebase(obj) {
+    if (Array.isArray(obj)) {
+      const isNumeric = obj.some(v => typeof v === 'number');
+      return obj.map(v => (v == null && isNumeric) ? 0 : sanitizeForFirebase(v));
+    }
+    if (obj && typeof obj === 'object') {
+      const out = {};
+      for (const k in obj) out[k] = sanitizeForFirebase(obj[k]);
+      return out;
+    }
+    return obj;
   }
 
   /* ---------- 变化监听 ---------- */
