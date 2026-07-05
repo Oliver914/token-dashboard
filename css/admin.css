@@ -337,6 +337,21 @@
   font-size: 16px; padding: 4px 8px; border-radius: 5px;
 }
 .data-table .row-del:hover { color: #e74c3c; background: #fdecea; }
+
+/* 自动计算的格子：灰底斜体，提示「非手填」 */
+.data-table.editable input.auto {
+  background: #f7f8fa;
+  color: #8a93a0;
+  font-style: italic;
+}
+.data-table.editable input.auto:focus {
+  background: #fff;
+  color: var(--ink);
+  font-style: normal;
+}
+.data-table.editable input.auto:hover {
+  background: #eef0f3;
+}
 .data-table th.th-model { position: relative; white-space: nowrap; }
 .data-table th .col-del {
   color: #ccc; cursor: pointer; background: none; border: none;

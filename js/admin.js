@@ -503,14 +503,112 @@ function readTotalFromTable() {
   };
 }
 
-/* ---------- 国产模型明细 ---------- */
+/* ---------- 国产模型明细 ----------
+   设计：
+     - 每行 = 周日期 | 各厂商(值) | 各厂商(环比) | 国产总和 | 国产环比 | 全球总和 | 份额 | 操作
+     - 「值」「全球总和」是手填输入
+     - 「环比」「国产总和」「国产环比」「份额」默认自动计算，但可手动覆盖
+     - 自动格子用灰底斜体显示；手动覆盖后变白底正常字（data-manual="1"）
+     - 输入任一值列时，重算该行所有「非手动」的下游字段
+------------------------------------- */
+
+// 标记某格被手动覆盖（value 列输入不标 manual，因为它本就是手填的）
+function markManual(input) {
+  input.dataset.manual = '1';
+  input.classList.remove('auto');
+}
+function isManual(input) { return input.dataset.manual === '1'; }
+
+// 计算单行的派生字段（不修改 DOM，返回计算结果）
+function calcDerived(tr) {
+  const models = Object.keys(state.domestic.models);
+  const vals = {};
+  models.forEach(m => {
+    const inp = tr.querySelector(`.dm-val[data-model="${CSS.escape(m)}"]`);
+    const v = parseFloat(inp.value);
+    vals[m] = isNaN(v) ? null : v;
+  });
+  // 国产总和 = 各厂商值之和（忽略 null）
+  const sumVals = Object.values(vals).reduce((a,b) => a + (b||0), 0);
+  const anyVal = Object.values(vals).some(v => v != null);
+  // 该行 index
+  const idx = +tr.dataset.idx;
+  // 上一周各厂商值（用于算环比）
+  const prevVals = {};
+  if (idx > 0) {
+    const prevTr = document.querySelector(`#domesticBody tr[data-idx="${idx-1}"]`);
+    if (prevTr) {
+      models.forEach(m => {
+        const inp = prevTr.querySelector(`.dm-val[data-model="${CSS.escape(m)}"]`);
+        const v = parseFloat(inp.value);
+        prevVals[m] = isNaN(v) ? null : v;
+      });
+    }
+  }
+  // 各厂商环比
+  const wows = {};
+  models.forEach(m => {
+    if (vals[m] == null || prevVals[m] == null || prevVals[m] === 0) wows[m] = null;
+    else wows[m] = Math.round((vals[m] - prevVals[m]) / prevVals[m] * 1000) / 10;
+  });
+  // 国产总和
+  const total = anyVal ? Math.round(sumVals * 1000) / 1000 : null;
+  // 国产环比（用总和算）
+  let totalWow = null;
+  if (idx > 0) {
+    const prevTotalInp = document.querySelector(`#domesticBody tr[data-idx="${idx-1}"] .dm-total`);
+    if (prevTotalInp) {
+      const pt = parseFloat(prevTotalInp.value);
+      if (!isNaN(pt) && pt !== 0 && total != null) {
+        totalWow = Math.round((total - pt) / pt * 1000) / 10;
+      }
+    }
+  }
+  // 份额
+  const globalInp = tr.querySelector('.dm-global');
+  const g = parseFloat(globalInp.value);
+  let share = null;
+  if (total != null && !isNaN(g) && g !== 0) {
+    share = Math.round(total / g * 1000) / 10;
+  }
+  return { vals, wows, total, totalWow, global: isNaN(g)?null:g, share };
+}
+
+// 重算单行未被手动覆盖的格子
+function recalcRow(tr) {
+  const d = calcDerived(tr);
+  const models = Object.keys(state.domestic.models);
+  // 各厂商环比
+  models.forEach(m => {
+    const inp = tr.querySelector(`.dm-wow[data-model="${CSS.escape(m)}"]`);
+    if (inp && !isManual(inp)) {
+      inp.value = d.wows[m] == null ? '' : d.wows[m];
+    }
+  });
+  // 国产总和
+  const totInp = tr.querySelector('.dm-total');
+  if (totInp && !isManual(totInp)) totInp.value = d.total == null ? '' : d.total;
+  // 国产环比
+  const twInp = tr.querySelector('.dm-totalwow');
+  if (twInp && !isManual(twInp)) twInp.value = d.totalWow == null ? '' : d.totalWow;
+  // 份额
+  const shInp = tr.querySelector('.dm-share');
+  if (shInp && !isManual(shInp)) shInp.value = d.share == null ? '' : d.share;
+  // 修改了本周，下一行的环比/总和环比也要重算（因为依赖本周）
+  const nextTr = document.querySelector(`#domesticBody tr[data-idx="${+tr.dataset.idx + 1}"]`);
+  if (nextTr) recalcRow(nextTr);
+}
+
 function renderDomesticTable() {
   const dom = state.domestic;
   const models = Object.keys(dom.models || {});
   const head = document.getElementById('domesticHead');
-  // 表头：周日期 | 各模型值(可删) | 国产总和 | 国产环比 | 全球总和 | 份额
+  // 表头：周日期 | 各模型(值) | 各模型(环比) | 国产总和 | 国产环比 | 全球总和 | 份额
   let th = '<tr><th>周日期</th>';
-  models.forEach(m => th += `<th class="th-model" data-model="${escapeAttr(m)}" title="点击 ✕ 删除该厂商列">${escapeHtml(m)}(T) <button class="col-del" data-model="${escapeAttr(m)}" title="删除厂商">✕</button></th>`);
+  models.forEach(m => {
+    th += `<th class="th-model" data-model="${escapeAttr(m)}" title="点击 ✕ 删除该厂商列">${escapeHtml(m)} (T) <button class="col-del" data-model="${escapeAttr(m)}" title="删除厂商">✕</button></th>`;
+    th += `<th>${escapeHtml(m)} 环比%</th>`;
+  });
   th += '<th>国产总和</th><th>国产环比%</th><th>全球总和</th><th>份额%</th><th>操作</th></tr>';
   head.innerHTML = th;
   // 行
@@ -521,20 +619,43 @@ function renderDomesticTable() {
     html += `<tr data-idx="${i}"><td><input type="text" class="dm-date" value="${escapeAttr(dom.dates[i]||'')}" /></td>`;
     models.forEach(m => {
       const v = dom.models[m].values_T[i];
+      // 值列：手填
       html += `<td><input type="number" step="0.001" class="dm-val" data-model="${escapeAttr(m)}" value="${v!=null?v:''}" /></td>`;
+      // 环比列：默认自动（auto），用户手动改过才转 manual；初始值先空，下面 recalcRow 统一填充
+      html += `<td><input type="number" step="0.1" class="dm-wow auto" data-model="${escapeAttr(m)}" data-manual="" value="" title="默认自动计算，可手动覆盖" /></td>`;
     });
-    html += `<td><input type="number" step="0.001" class="dm-total" value="${dom.total_T[i]!=null?dom.total_T[i]:''}" /></td>`;
-    html += `<td><input type="number" step="0.1" class="dm-totalwow" value="${dom.total_wow[i]!=null?dom.total_wow[i]:''}" /></td>`;
+    // 国产总和 / 国产环比 / 份额：默认 auto，初始空，recalcRow 填充
+    html += `<td><input type="number" step="0.001" class="dm-total auto" data-manual="" value="" title="默认=各厂商之和，可手动覆盖" /></td>`;
+    html += `<td><input type="number" step="0.1" class="dm-totalwow auto" data-manual="" value="" title="默认自动计算，可手动覆盖" /></td>`;
+    // 全球总和：手填
     html += `<td><input type="number" step="0.001" class="dm-global" value="${dom.global_T[i]!=null?dom.global_T[i]:''}" /></td>`;
-    html += `<td><input type="number" step="0.1" class="dm-share" value="${dom.share[i]!=null?dom.share[i]:''}" /></td>`;
+    html += `<td><input type="number" step="0.1" class="dm-share auto" data-manual="" value="" title="默认=国产/全球，可手动覆盖" /></td>`;
     html += `<td><button class="row-del">✕</button></td></tr>`;
   }
   body.innerHTML = html;
+  // 渲染后用计算值填充所有 auto 格子（从第一行起，因为环比依赖上一行，必须顺序算）
+  document.querySelectorAll('#domesticBody tr').forEach(tr => recalcRow(tr));
 }
+
 function setupDomesticEvents() {
   const body = document.getElementById('domesticBody');
   const head = document.getElementById('domesticHead');
-  body.addEventListener('input', markDirty);
+  // input：值列改变 → 重算；自动列被手改 → 标 manual
+  body.addEventListener('input', (e) => {
+    const inp = e.target;
+    const tr = inp.closest('tr');
+    if (!tr) return;
+    if (inp.classList.contains('dm-val') || inp.classList.contains('dm-global')) {
+      recalcRow(tr);
+    } else if (inp.classList.contains('dm-wow') || inp.classList.contains('dm-total') ||
+               inp.classList.contains('dm-totalwow') || inp.classList.contains('dm-share')) {
+      // 手动覆盖自动格子
+      if (inp.value.trim() !== '') markManual(inp);
+      else { inp.dataset.manual = ''; inp.classList.add('auto'); recalcRow(tr); }
+    }
+    markDirty();
+  });
+  // 删除行
   body.addEventListener('click', (e) => {
     if (!e.target.closest('.row-del')) return;
     const idx = +e.target.closest('tr').dataset.idx;
@@ -572,7 +693,6 @@ function setupDomesticEvents() {
   // + 厂商：弹框输入名字，新增一列
   const addModelBtn = document.getElementById('addModelBtn');
   if (addModelBtn) addModelBtn.addEventListener('click', () => {
-    // 用配置里的预设 + 自定义
     const configured = (typeof getModelNames === 'function') ? getModelNames() : [];
     const existing = Object.keys(state.domestic.models);
     const suggestions = configured.filter(m => !existing.includes(m));
@@ -587,6 +707,7 @@ function setupDomesticEvents() {
     renderDomesticTable(); markDirty();
   });
 }
+
 function readDomesticFromTable() {
   const trs = document.querySelectorAll('#domesticBody tr');
   const models = Object.keys(state.domestic.models);
@@ -596,11 +717,12 @@ function readDomesticFromTable() {
   trs.forEach(tr => {
     dates.push(tr.querySelector('.dm-date').value.trim());
     models.forEach(m => {
-      const inp = tr.querySelector(`.dm-val[data-model="${CSS.escape(m)}"]`);
-      const v = parseFloat(inp.value);
+      const vInp = tr.querySelector(`.dm-val[data-model="${CSS.escape(m)}"]`);
+      const wInp = tr.querySelector(`.dm-wow[data-model="${CSS.escape(m)}"]`);
+      const v = parseFloat(vInp.value);
+      const w = parseFloat(wInp.value);
       modelData[m].values_T.push(isNaN(v)?null:v);
-      // wow 列在国产明细表格里没有单独列，保留原值或 null
-      modelData[m].wow.push(null);
+      modelData[m].wow.push(isNaN(w)?null:w);
     });
     const tot = parseFloat(tr.querySelector('.dm-total').value); total_T.push(isNaN(tot)?null:tot);
     const tw = parseFloat(tr.querySelector('.dm-totalwow').value); total_wow.push(isNaN(tw)?null:tw);
