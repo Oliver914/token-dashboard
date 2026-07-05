@@ -392,7 +392,18 @@
       XLSX.utils.book_append_sheet(wb, ws2, '【原始数据】消耗量统计');
       XLSX.utils.book_append_sheet(wb, ws3, '【国内】每天消耗量统计');
 
-      const label = (d.meta && d.meta.week_label) || 'export';
+      // 文件名日期：优先用最新一周的实际日期（动态），回退到 meta.week_label
+      const latestDate = (() => {
+        const cands = [
+          d.total_history && d.total_history.dates && d.total_history.dates.slice(-1)[0],
+          d.domestic && d.domestic.dates && d.domestic.dates.slice(-1)[0]
+        ].filter(Boolean);
+        if (!cands.length) return '';
+        // 取最大的日期，并规整成 YYYYMMDD（去掉分隔符）
+        const latest = cands.sort().pop();
+        return String(latest).replace(/[-/年月日\s]/g, '').slice(0, 8);
+      })();
+      const label = latestDate || (d.meta && d.meta.week_label) || 'export';
       const filename = `Token出海数据库_${label}.xlsx`;
 
       XLSX.writeFile(wb, filename);

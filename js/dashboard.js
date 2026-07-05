@@ -25,6 +25,22 @@ const charts = [];   // 保存所有 ECharts 实例，便于 resize
 let lastData = null; // 最近一次数据（用于实时重绘）
 
 document.addEventListener('DOMContentLoaded', async () => {
+  await DataStore.init();
+
+  // ===== 看板访问密码门 =====
+  const container = document.querySelector('.container');
+  if (!DataStore.isViewAuthed()) {
+    // 隐藏看板内容，显示密码页
+    container.style.display = 'none';
+    showViewGate();
+    return; // 验证通过后 showViewGate 会重新触发 renderAll
+  }
+
+  bootDashboard();
+});
+
+// 启动看板（密码验证后调用）
+async function bootDashboard() {
   // 导出按钮
   const exportBtn = document.getElementById('exportBtn');
   if (exportBtn) exportBtn.addEventListener('click', () => {
@@ -36,7 +52,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   });
 
-  await DataStore.init();
   // 首次加载
   const data = DataStore.normalizeStructure(await DataStore.load());
   lastData = data;
@@ -51,7 +66,40 @@ document.addEventListener('DOMContentLoaded', async () => {
     renderAll(lastData);
   });
   window.addEventListener('resize', () => charts.forEach(c => c && c.resize()));
-});
+}
+
+// 显示看板访问密码门
+function showViewGate() {
+  const gate = document.createElement('div');
+  gate.id = 'viewGate';
+  gate.innerHTML = `
+    <div class="gate-card">
+      <div class="logo-mark"><span class="logo-dot"></span><span class="logo-text">T</span></div>
+      <h1 class="gate-title">Token 出海数据库</h1>
+      <p class="gate-sub">请输入访问密码</p>
+      <form id="gateForm" class="gate-form">
+        <input type="password" id="gatePwd" placeholder="访问密码" autocomplete="off" autofocus />
+        <div id="gateError" class="gate-error"></div>
+        <button type="submit" class="btn btn-primary btn-block">进 入</button>
+      </form>
+    </div>`;
+  document.body.appendChild(gate);
+  document.getElementById('gateForm').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const pwd = document.getElementById('gatePwd').value;
+    const err = document.getElementById('gateError');
+    err.textContent = '';
+    if (DataStore.authView(pwd)) {
+      // 移除密码门，显示看板
+      gate.remove();
+      document.querySelector('.container').style.display = '';
+      bootDashboard();
+    } else {
+      err.textContent = '密码不正确';
+      document.getElementById('gatePwd').select();
+    }
+  });
+}
 
 /* ---------- 总入口 ---------- */
 function renderAll(d) {

@@ -405,6 +405,13 @@
   background: var(--bg-soft); border-radius: 10px; padding: 14px 18px;
   font-size: 13px; color: var(--gray); margin-bottom: 20px;
 }
+/* 子分隔块（如「看板访问密码」区） */
+.divider-block {
+  margin-top: 32px; padding-top: 24px;
+  border-top: 1px solid var(--line);
+}
+.divider-block .sub-h { margin: 0 0 6px; font-size: 16px; font-weight: 600; }
+.divider-block .sub-desc { margin: 0 0 16px; font-size: 12.5px; color: var(--gray); line-height: 1.6; }
 
 /* ---------- 响应式 ---------- */
 @media (max-width: 860px) {

@@ -182,13 +182,43 @@ const DataStore = (() => {
       footer: d.footer || '来源：Openrouter · 欢迎交流',
       total_history: d.total_history || { dates: [], values: [], wow: [] },
       domestic: d.domestic || { dates: [], total_T: [], total_wow: [], global_T: [], share: [], models: {} },
-      settings: d.settings || { updated_at: nowStr() }
+      settings: Object.assign({ updated_at: nowStr(), view_password: 'token2026' }, d.settings || {})
     };
+  }
+
+  /* ---------- 看板访问密码（独立于管理员登录）---------- */
+  const VIEW_PWD_KEY = 'view_authed';
+  function getViewPassword() {
+    return (cache && cache.settings && cache.settings.view_password) || 'token2026';
+  }
+  function checkViewPassword(pwd) {
+    return pwd === getViewPassword();
+  }
+  function authView(pwd) {
+    if (checkViewPassword(pwd)) { sessionStorage.setItem(VIEW_PWD_KEY, '1'); return true; }
+    return false;
+  }
+  function isViewAuthed() {
+    return sessionStorage.getItem(VIEW_PWD_KEY) === '1';
+  }
+  function clearViewAuth() { sessionStorage.removeItem(VIEW_PWD_KEY); }
+  async function setViewPassword(newPwd) {
+    if (!cache) cache = await load();
+    if (!cache.settings) cache.settings = {};
+    cache.settings.view_password = newPwd;
+    cache.settings.updated_at = nowStr();
+    if (firebaseReady) {
+      await db.ref('settings/view_password').set(newPwd);
+    } else {
+      saveLocal(cache);
+    }
   }
 
   return {
     init, load, save, saveCharts, onChange,
     isConfigured, signIn, signOut, onAuth, changePassword,
-    normalizeStructure
+    normalizeStructure,
+    // 看板访问密码
+    getViewPassword, checkViewPassword, authView, isViewAuthed, clearViewAuth, setViewPassword
   };
 })();
