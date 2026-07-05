@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="robots" content="noindex,nofollow" />
+  <title>管理后台 · Token 看板</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css" />
+  <link rel="stylesheet" href="css/admin.css" />
+</head>
+<body class="admin-body">
+  <div class="brand-line"></div>
+
+  <!-- ============ 登录视图 ============ -->
+  <div id="loginView" class="login-view">
+    <div class="login-card">
+      <div class="login-logo">
+        <div class="logo-mark"><span class="logo-dot"></span><span class="logo-text">T</span></div>
+      </div>
+      <h1 class="login-title">管理后台</h1>
+      <p class="login-sub">Token 出海看板 · 内容编辑</p>
+      <form id="loginForm" class="login-form">
+        <label class="field">
+          <span class="field-label">账号</span>
+          <input type="text" id="loginUser" autocomplete="username" placeholder="admin" required />
+        </label>
+        <label class="field">
+          <span class="field-label">密码</span>
+          <input type="password" id="loginPwd" autocomplete="current-password" placeholder="••••••" required />
+        </label>
+        <div id="loginError" class="login-error"></div>
+        <button type="submit" class="btn btn-primary btn-block" id="loginSubmit">登 录</button>
+      </form>
+      <div id="loginHint" class="login-hint"></div>
+      <a href="index.html" class="back-link">← 返回看板</a>
+    </div>
+  </div>
+
+  <!-- ============ 编辑器视图 ============ -->
+  <div id="appView" class="app-view" style="display:none">
+    <!-- 顶栏 -->
+    <header class="admin-topbar">
+      <div class="topbar-left">
+        <div class="logo-mark sm"><span class="logo-text">T</span></div>
+        <span class="topbar-title">管理后台</span>
+        <span class="topbar-status" id="modeBadge">本地预览</span>
+      </div>
+      <div class="topbar-right">
+        <a href="index.html" target="_blank" class="btn btn-ghost btn-sm">预览看板 ↗</a>
+        <span class="topbar-user" id="topbarUser">admin</span>
+        <button class="btn btn-ghost btn-sm" id="logoutBtn">退出</button>
+      </div>
+    </header>
+
+    <div class="admin-shell">
+      <!-- 左侧导航 -->
+      <nav class="admin-nav" id="adminNav">
+        <a href="#summary" class="nav-item active" data-pane="summary">本周总结</a>
+        <a href="#kpi" class="nav-item" data-pane="kpi">KPI 卡片</a>
+        <a href="#modules" class="nav-item" data-pane="modules">模块管理</a>
+        <a href="#top10" class="nav-item" data-pane="top10">前 10 排名</a>
+        <a href="#charts" class="nav-item" data-pane="charts">图表数据</a>
+        <a href="#misc" class="nav-item" data-pane="misc">标题 / 页脚</a>
+        <a href="#account" class="nav-item" data-pane="account">账号设置</a>
+      </nav>
+
+      <!-- 右侧内容区 -->
+      <main class="admin-main">
+        <!-- 操作条 -->
+        <div class="action-bar">
+          <div class="action-status" id="actionStatus">
+            <span class="dot saved"></span><span>已同步</span>
+          </div>
+          <div class="action-buttons">
+            <button class="btn btn-ghost" id="reloadBtn">从 Excel 重载</button>
+            <button class="btn btn-primary" id="saveBtn">保存全部</button>
+          </div>
+        </div>
+
+        <!-- ===== 本周总结 ===== -->
+        <section class="pane active" id="pane-summary">
+          <div class="pane-head">
+            <h2>本周总结</h2>
+            <p>支持 Markdown（<code>**加粗**</code>、<code>*斜体*</code>）；选中文字后可设字体颜色和高亮。</p>
+          </div>
+          <div class="md-editor">
+            <div class="md-toolbar">
+              <button type="button" class="md-tool" data-act="bold" title="加粗"><b>B</b></button>
+              <button type="button" class="md-tool" data-act="italic" title="斜体"><i>I</i></button>
+              <span class="md-divider"></span>
+              <span class="color-label">颜色：</span>
+              <div class="color-swatches" id="colorSwatches">
+                <!-- JS 注入预设色 -->
+                <label class="swatch-none" title="默认色">
+                  <input type="radio" name="mdColor" value="" checked />
+                  <span>A</span>
+                </label>
+              </div>
+              <input type="color" id="customColor" class="custom-color" value="#ED7D31" title="自定义颜色" />
+              <span class="md-divider"></span>
+              <button type="button" class="md-tool" data-act="addLine" title="新增一行">+ 行</button>
+              <button type="button" class="md-tool" data-act="delLine" title="删除当前行">− 行</button>
+            </div>
+            <div class="md-lines" id="mdLines"><!-- JS 注入 --></div>
+          </div>
+          <div class="preview-block">
+            <div class="preview-label">预览</div>
+            <div class="summary-body" id="summaryPreview"></div>
+          </div>
+        </section>
+
+        <!-- ===== KPI 卡片 ===== -->
+        <section class="pane" id="pane-kpi">
+          <div class="pane-head">
+            <h2>KPI 卡片</h2>
+            <p>顶部三张数据卡片，每张含标签 / 主值 / 趋势说明。</p>
+          </div>
+          <div class="kpi-editor" id="kpiEditor"><!-- JS 注入 3 个表单组 --></div>
+        </section>
+
+        <!-- ===== 模块管理 ===== -->
+        <section class="pane" id="pane-modules">
+          <div class="pane-head">
+            <h2>模块管理</h2>
+            <p>控制看板四个模块的标题、点评、显示与否和顺序。</p>
+          </div>
+          <div class="module-editor" id="moduleEditor"></div>
+          <button class="btn btn-ghost btn-add" id="addModuleBtn">+ 添加模块</button>
+          <div class="hint">注：模块 1-4 对应看板固定的 4 类图表区域。新增的模块会作为看板末尾的「说明块」显示。隐藏模块会连同其图表一起从看板移除。</div>
+        </section>
+
+        <!-- ===== 前 10 排名 ===== -->
+        <section class="pane" id="pane-top10">
+          <div class="pane-head">
+            <h2>本周前 10 排名</h2>
+            <p>每周前 10 大模型。可增删行；排名自动按序号生成。</p>
+          </div>
+          <div class="table-wrap">
+            <table class="data-table" id="top10Table">
+              <thead>
+                <tr><th style="width:60px">#</th><th>模型名称</th><th style="width:120px">Tokens (T)</th><th style="width:120px">环比 %</th><th style="width:80px">操作</th></tr>
+              </thead>
+              <tbody id="top10Body"></tbody>
+            </table>
+          </div>
+          <button class="btn btn-ghost btn-add" id="addRankBtn">+ 添加排名</button>
+        </section>
+
+        <!-- ===== 图表数据 ===== -->
+        <section class="pane" id="pane-charts">
+          <div class="pane-head">
+            <h2>图表数据</h2>
+            <p>所有图表的底层数据。可在线表格编辑，也可上传 Excel 批量导入。</p>
+          </div>
+          <div class="tabs">
+            <button class="tab active" data-tab="total">总消耗曲线</button>
+            <button class="tab" data-tab="domestic">国产模型明细</button>
+            <button class="tab" data-tab="import">Excel 导入</button>
+          </div>
+
+          <!-- 总消耗曲线 -->
+          <div class="tab-pane active" id="tp-total">
+            <div class="table-wrap">
+              <table class="data-table editable" id="totalTable">
+                <thead><tr><th style="width:140px">周起始</th><th>总消耗 (T)</th><th>环比 %</th></tr></thead>
+                <tbody id="totalBody"></tbody>
+              </table>
+            </div>
+            <button class="btn btn-ghost btn-add" id="addTotalRowBtn">+ 添加一周</button>
+          </div>
+
+          <!-- 国产模型明细 -->
+          <div class="tab-pane" id="tp-domestic">
+            <div class="table-scroll">
+              <table class="data-table editable" id="domesticTable">
+                <thead id="domesticHead"></thead>
+                <tbody id="domesticBody"></tbody>
+              </table>
+            </div>
+            <button class="btn btn-ghost btn-add" id="addDomRowBtn">+ 添加一周</button>
+          </div>
+
+          <!-- Excel 导入 -->
+          <div class="tab-pane" id="tp-import">
+            <div class="import-zone">
+              <div class="import-card">
+                <div class="import-icon">📥</div>
+                <h3>上传 Excel 文件</h3>
+                <p>支持你现有的【天风计算机】Token出海数据库.xlsx 格式（密码自动用 ainb 解密）。<br/>上传后会解析两个数据 sheet 并预览，确认无误后导入。</p>
+                <input type="file" id="excelFile" accept=".xlsx" hidden />
+                <button class="btn btn-primary" id="excelPickBtn">选择文件</button>
+                <span id="excelFileName" class="file-name"></span>
+                <button class="btn btn-ghost" id="downloadTplBtn">下载模板</button>
+              </div>
+              <div id="excelPreview" class="excel-preview"></div>
+              <div id="excelActions" class="import-actions" style="display:none">
+                <span id="excelParseInfo" class="parse-info"></span>
+                <button class="btn btn-primary" id="excelConfirmBtn">确认导入</button>
+              </div>
+            </div>
+            <div class="hint">导入将覆盖当前图表数据（看板文字/KPI/排名不受影响）。导入后请点击顶部「保存全部」。</div>
+          </div>
+        </section>
+
+        <!-- ===== 标题 / 页脚 ===== -->
+        <section class="pane" id="pane-misc">
+          <div class="pane-head">
+            <h2>标题与页脚</h2>
+            <p>看板顶部主标题、团队副标题（自动从标题【】提取）、底部页脚。</p>
+          </div>
+          <label class="field">
+            <span class="field-label">主标题（团队名用【】包裹）</span>
+            <input type="text" id="titleInput" />
+          </label>
+          <label class="field">
+            <span class="field-label">页脚</span>
+            <input type="text" id="footerInput" />
+          </label>
+          <label class="field">
+            <span class="field-label">数据周期标签（显示在右上角）</span>
+            <input type="text" id="periodInput" placeholder="如：2026年6月22日-2026年6月28日" />
+          </label>
+        </section>
+
+        <!-- ===== 账号设置 ===== -->
+        <section class="pane" id="pane-account">
+          <div class="pane-head">
+            <h2>账号设置</h2>
+            <p>修改登录密码。账号名默认 admin（Firebase 模式下为登录邮箱）。</p>
+          </div>
+          <div id="accountInfo" class="account-info"></div>
+          <label class="field">
+            <span class="field-label">新密码</span>
+            <input type="password" id="newPwd" placeholder="至少 6 位" />
+          </label>
+          <label class="field">
+            <span class="field-label">确认新密码</span>
+            <input type="password" id="newPwd2" placeholder="再次输入" />
+          </label>
+          <div id="pwdMsg" class="login-error"></div>
+          <button class="btn btn-primary" id="changePwdBtn">修改密码</button>
+        </section>
+
+      </main>
+    </div>
+  </div>
+
+  <!-- 脚本 -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/marked@9.1.6/marked.min.js"></script>
+  <script src="js/firebase-config.js"></script>
+  <script src="js/data-store.js"></script>
+  <script src="js/excel-parser.js"></script>
+  <script src="js/admin.js"></script>
+</body>
+</html>

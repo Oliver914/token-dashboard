@@ -12,8 +12,9 @@ Token 出海数据库 — 网页自动更新脚本
   6. （可选）git 提交并推送到 GitHub Pages
 
 用法：
-  python3 update.py            # 仅生成 data.json
-  python3 update.py --push     # 生成并推送到 GitHub
+  python3 update.py              # 仅生成 data.json（本地兜底数据）
+  python3 update.py --firebase   # 生成并写入 Firebase（看板实时刷新，推荐）
+  python3 update.py --push       # 生成并推送到 GitHub Pages（旧工作流）
 """
 
 import sys
@@ -345,9 +346,65 @@ def git_push(week_label):
         return False
 
 
+# ---------- 6b. Firebase 写入（REST API，无需额外依赖）----------
+FIREBASE_CONFIG_PATH = SCRIPT_DIR / "js" / "firebase-config.js"
+
+def _read_firebase_config():
+    """从 js/firebase-config.js 解析出 databaseURL；返回 None 表示未配置。"""
+    if not FIREBASE_CONFIG_PATH.exists():
+        return None
+    txt = FIREBASE_CONFIG_PATH.read_text(encoding="utf-8")
+    m = re.search(r'databaseURL\s*:\s*"([^"]+)"', txt)
+    return m.group(1) if m else None
+
+def push_to_firebase(data):
+    """用 Firebase REST API 覆盖写入数据。
+       需要 Realtime Database 处于「测试模式」（30 天内允许读写）或配置了规则。"""
+    import urllib.request
+    db_url = _read_firebase_config()
+    if not db_url or "YOUR_" in db_url:
+        print("⚠️  Firebase 未配置（js/firebase-config.js 里仍是占位符）。")
+        print("   请先按 README.md 完成 Firebase 配置。本次只生成 data.json，不写云端。")
+        return False
+    # 拆成 content / charts / settings 三块写入
+    content = {
+        "title": data.get("title"),
+        "summary": data.get("summary"),
+        "kpi": data.get("kpi"),
+        "modules": data.get("modules"),
+        "top10": data.get("top10"),
+        "footer": data.get("footer"),
+        "meta": data.get("meta"),
+    }
+    charts = {
+        "total_history": data.get("total_history"),
+        "domestic": data.get("domestic"),
+    }
+    settings = {"updated_at": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "admin_user": "admin"}
+    base = db_url.rstrip("/") + "/"
+    for key, payload in [("content", content), ("charts", charts), ("settings", settings)]:
+        body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+        req = urllib.request.Request(base + key + ".json",
+                                     data=body,
+                                     headers={"Content-Type": "application/json"},
+                                     method="PUT")
+        try:
+            with urllib.request.urlopen(req, timeout=20) as resp:
+                resp.read()
+            print(f"   ✓ {key} 已写入")
+        except Exception as e:
+            print(f"   ✗ {key} 写入失败：{e}")
+            print(f"     提示：若为权限错误，请在 Firebase 控制台把 Realtime Database 规则临时设为公开测试模式。")
+            return False
+    print("✅ 已写入 Firebase，看板将实时刷新。")
+    return True
+
+
 # ---------- 主流程 ----------
 def main():
     do_push = "--push" in sys.argv
+    do_firebase = "--firebase" in sys.argv
     ensure_deps()
 
     print("🔍 正在查找最新数据库...")
@@ -368,11 +425,18 @@ def main():
     print(f"   总量历史：{n_total} 周")
     print(f"   国产明细：{n_dom} 周 × {len(data['domestic'].get('models', {}))} 个模型")
 
+    # 总是先生成 data.json（作为兜底数据源 + 备份）
     print("💾 生成 data.json...")
     out = write_json(data)
     print(f"   已写入：{out}")
 
-    if do_push:
+    # --firebase：写入 Firebase 云数据库（看板实时刷新）
+    if do_firebase:
+        print("☁️  写入 Firebase...")
+        push_to_firebase(data)
+
+    # --push：git 推送（旧 GitHub Pages 工作流，兼容保留）
+    if do_push and not do_firebase:
         print("🚀 推送到 GitHub Pages...")
         git_push(week_label)
 

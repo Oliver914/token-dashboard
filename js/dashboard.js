@@ -22,26 +22,36 @@ const CHART_TEXT = {
 const SPLIT_LINE = { lineStyle: { color: '#f0f0f0' } };
 
 const charts = [];   // 保存所有 ECharts 实例，便于 resize
+let lastData = null; // 最近一次数据（用于实时重绘）
 
-document.addEventListener('DOMContentLoaded', () => {
-  load();
+document.addEventListener('DOMContentLoaded', async () => {
+  // 导出按钮
+  const exportBtn = document.getElementById('exportBtn');
+  if (exportBtn) exportBtn.addEventListener('click', () => {
+    if (window.exportToExcel && lastData) {
+      exportBtn.textContent = '导出中…';
+      try { window.exportToExcel(lastData); }
+      catch (e) { console.error(e); alert('导出失败：' + e.message); }
+      exportBtn.textContent = '导出 Excel';
+    }
+  });
+
+  await DataStore.init();
+  // 首次加载
+  const data = DataStore.normalizeStructure(await DataStore.load());
+  lastData = data;
+  renderAll(data);
+  // 数据变化时实时重绘（后台编辑/Excel 导入后自动刷新）
+  DataStore.onChange(d => {
+    if (!d) return;
+    lastData = DataStore.normalizeStructure(d);
+    // 释放旧图表实例避免内存泄漏
+    charts.forEach(c => { try { c.dispose(); } catch(e){} });
+    charts.length = 0;
+    renderAll(lastData);
+  });
   window.addEventListener('resize', () => charts.forEach(c => c && c.resize()));
 });
-
-async function load() {
-  let data;
-  try {
-    const res = await fetch('data.json?v=' + Date.now());
-    data = await res.json();
-  } catch (e) {
-    document.querySelector('.container').insertAdjacentHTML('afterbegin',
-      `<div style="padding:20px;background:#fff3f3;color:#c0392b;border-radius:10px;margin-bottom:20px">
-         读取 data.json 失败。请先运行 <code>update.py</code> 生成数据。
-       </div>`);
-    return;
-  }
-  renderAll(data);
-}
 
 /* ---------- 总入口 ---------- */
 function renderAll(d) {
@@ -80,12 +90,22 @@ function renderHero(d) {
 }
 
 /* ---------- 本周总结 ---------- */
+// summary 支持两种格式：纯字符串数组（旧 data.json）/ 对象数组 {text,color,bold}
 function renderSummary(lines) {
   const box = document.getElementById('summaryBody');
-  if (!lines.length) { box.innerHTML = '<p>—</p>'; return; }
-  box.innerHTML = lines.map((ln, i) =>
-    `<p class="${i === 0 ? 'lead' : ''}">${escapeHtml(ln)}</p>`
-  ).join('');
+  if (!lines || !lines.length) { box.innerHTML = '<p>—</p>'; return; }
+  box.innerHTML = lines.map((ln, i) => {
+    const text = typeof ln === 'string' ? ln : (ln.text || '');
+    const color = (typeof ln === 'object' && ln.color) ? ln.color : '';
+    const bold = (typeof ln === 'object' && ln.bold) || /^1）|^2）|^3）|^4）|^5）|^总结/.test(text);
+    // 支持 Markdown 加粗 **xxx** 和 *斜体*
+    let html = escapeHtml(text);
+    html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+    html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
+    const cls = i === 0 ? 'lead' : '';
+    const style = (color || bold) ? ` style="${color?'color:'+color+';':''}${bold?'font-weight:600;':''}"` : '';
+    return `<p class="${cls}"${style}>${html}</p>`;
+  }).join('');
 }
 
 /* ---------- KPI ---------- */
@@ -133,13 +153,15 @@ function animateText(el, text) {
   requestAnimationFrame(tick);
 }
 
-/* ---------- 模块标题 ---------- */
+/* ---------- 模块标题 + 显隐 ---------- */
 function renderModules(modules) {
   modules.forEach((m, i) => {
     const t = document.getElementById('m' + i + 'Title');
     const c = document.getElementById('m' + i + 'Comment');
+    const sec = document.getElementById('module' + i);
     if (t) t.textContent = m.title || ('模块' + (i + 1));
     if (c) c.textContent = m.comment || '';
+    if (sec) sec.style.display = m.visible === false ? 'none' : '';
   });
 }
 

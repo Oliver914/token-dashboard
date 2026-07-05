@@ -33,7 +33,13 @@
           <span class="pulse-dot"></span>
           <span id="freshText">每周更新 · 已最新</span>
         </div>
-        <div class="period-tag" id="periodTag">数据周期 —</div>
+        <div class="hero-actions">
+          <button id="exportBtn" class="export-btn" title="导出当前数据为 Excel">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            导出 Excel
+          </button>
+          <div class="period-tag" id="periodTag">数据周期 —</div>
+        </div>
       </div>
     </header>
 
@@ -65,7 +71,7 @@
     </section>
 
     <!-- ===== 模块 1：总消耗曲线 ===== -->
-    <section class="module reveal">
+    <section class="module reveal" id="module0">
       <div class="module-head">
         <div>
           <h2 class="module-title" id="m0Title">模块1</h2>
@@ -78,7 +84,7 @@
     </section>
 
     <!-- ===== 模块 2：前 10 排名 ===== -->
-    <section class="module reveal">
+    <section class="module reveal" id="module1">
       <div class="module-head">
         <div>
           <h2 class="module-title" id="m1Title">模块2</h2>
@@ -91,7 +97,7 @@
     </section>
 
     <!-- ===== 模块 3：国产份额 ===== -->
-    <section class="module reveal">
+    <section class="module reveal" id="module2">
       <div class="module-head">
         <div>
           <h2 class="module-title" id="m2Title">模块3</h2>
@@ -109,7 +115,7 @@
     </section>
 
     <!-- ===== 模块 4：各国产模型明细 ===== -->
-    <section class="module reveal">
+    <section class="module reveal" id="module3">
       <div class="module-head">
         <div>
           <h2 class="module-title" id="m3Title">模块4</h2>
@@ -129,6 +135,17 @@
     </footer>
 
   </main>
+
+  <!-- Firebase（仅在配置后生效；未配置时自动降级到本地存储，无需移除） -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+
+  <!-- 项目脚本（顺序重要：配置 → 数据层 → 业务） -->
+  <script src="js/firebase-config.js"></script>
+  <script src="js/data-store.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="js/export-excel.js"></script>
 
   <!-- ECharts（离线可备用本地副本，默认走 CDN） -->
   <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
