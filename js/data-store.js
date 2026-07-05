@@ -225,14 +225,15 @@ const DataStore = (() => {
       footer: d.footer || '来源：Openrouter · 欢迎交流',
       total_history: d.total_history || { dates: [], values: [], wow: [] },
       domestic: d.domestic || { dates: [], total_T: [], total_wow: [], global_T: [], share: [], models: {} },
-      settings: Object.assign({ updated_at: nowStr(), view_password: 'token2026' }, d.settings || {})
+      settings: Object.assign({ updated_at: nowStr(), view_password: '' }, d.settings || {})
     };
   }
 
   /* ---------- 看板访问密码（独立于管理员登录）---------- */
   const VIEW_PWD_KEY = 'view_authed';
   function getViewPassword() {
-    return (cache && cache.settings && cache.settings.view_password) || 'token2026';
+    // 只认云端配置的密码；未配置时返回空（看板会进入「请联系管理员」状态，不会用默认密码放行）
+    return (cache && cache.settings && cache.settings.view_password) || '';
   }
   function checkViewPassword(pwd) {
     return pwd === getViewPassword();
