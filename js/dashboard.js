@@ -179,6 +179,25 @@ function renderFooter(d) {
    ECharts 图表
    ========================================================= */
 
+// 通用 tooltip 样式（所有图表共用，鼠标悬停显示完整周数据）
+function makeTooltip(extraFormatter) {
+  return {
+    trigger: 'axis',
+    backgroundColor: '#fff',
+    borderColor: '#eee',
+    borderWidth: 1,
+    padding: [10, 14],
+    textStyle: { color: PALETTE.ink, fontSize: 13 },
+    extraCssText: 'box-shadow: 0 6px 24px rgba(20,25,35,.10); border-radius: 8px;',
+    axisPointer: {
+      type: 'shadow',
+      shadowStyle: { color: 'rgba(237,125,49,.06)' },
+      label: { backgroundColor: PALETTE.orange }
+    },
+    formatter: extraFormatter || null
+  };
+}
+
 // 模块1：大模型总消耗曲线（柱+折线）
 function renderChartTotal(h) {
   if (!h || !h.dates || !h.dates.length) return;
@@ -186,20 +205,18 @@ function renderChartTotal(h) {
   const chart = echarts.init(el);
   charts.push(chart);
   chart.setOption({
-    grid: { left: 48, right: 56, top: 40, bottom: 60 },
-    tooltip: {
-      trigger: 'axis',
-      backgroundColor: '#fff',
-      borderColor: '#eee',
-      textStyle: { color: PALETTE.ink },
-      valueFormatter: (v, p) => {
-        if (p.seriesName.includes('环比')) return v == null ? '-' : v + '%';
-        return v == null ? '-' : v + 'T';
-      }
-    },
+    grid: { left: 52, right: 58, top: 44, bottom: 64 },
+    tooltip: makeTooltip(function (params) {
+      const date = params[0].axisValueLabel || params[0].name;
+      const tot = params.find(p => p.seriesName.includes('总调用')) || {};
+      const wow = params.find(p => p.seriesName.includes('环比')) || {};
+      return `<div style="font-weight:600;margin-bottom:6px">${date}</div>
+              <div style="color:${PALETTE.gray}">总调用量：<b style="color:${PALETTE.ink}">${tot.value == null ? '-' : tot.value + ' T'}</b></div>
+              <div style="color:${PALETTE.gray}">周环比：<b style="color:${wow.value >= 0 ? PALETTE.orange : PALETTE.gray}">${wow.value == null ? '-' : (wow.value >= 0 ? '+' : '') + wow.value + '%'}</b></div>`;
+    }),
     legend: {
       data: ['大模型总调用量（T）', '周环比'],
-      top: 4, right: 8, icon: 'roundRect', itemWidth: 12, itemHeight: 8,
+      top: 6, right: 12, icon: 'roundRect', itemWidth: 12, itemHeight: 8,
       textStyle: CHART_TEXT
     },
     xAxis: {
@@ -207,13 +224,17 @@ function renderChartTotal(h) {
       data: h.dates,
       axisLine: { lineStyle: { color: PALETTE.line } },
       axisTick: { show: false },
-      axisLabel: { ...CHART_TEXT, fontSize: 11, rotate: 35, hideOverlap: true }
+      axisLabel: { ...CHART_TEXT, fontSize: 11, rotate: 35, hideOverlap: true },
+      axisPointer: { type: 'shadow' }
     },
     yAxis: [
-      { type: 'value', name: 'T', nameTextStyle: { ...CHART_TEXT, fontSize: 11 },
+      { type: 'value', name: '调用量 (T)',
+        nameTextStyle: { ...CHART_TEXT, fontSize: 11, padding: [0, 0, 0, -20] },
         splitLine: SPLIT_LINE, axisLabel: { ...CHART_TEXT, fontSize: 11 } },
-      { type: 'value', name: '%', nameTextStyle: { ...CHART_TEXT, fontSize: 11 },
-        splitLine: { show: false }, axisLabel: { ...CHART_TEXT, fontSize: 11, formatter: '{value}%' } }
+      { type: 'value',
+        nameTextStyle: { ...CHART_TEXT, fontSize: 11 },
+        splitLine: { show: false },
+        axisLabel: { ...CHART_TEXT, fontSize: 11, formatter: '{value}%' } }
     ],
     series: [
       {
@@ -253,22 +274,29 @@ function renderChartDomTotal(dom) {
   const chart = echarts.init(el);
   charts.push(chart);
   chart.setOption({
-    grid: { left: 48, right: 52, top: 40, bottom: 60 },
-    tooltip: {
-      trigger: 'axis', backgroundColor: '#fff', borderColor: '#eee',
-      textStyle: { color: PALETTE.ink },
-      valueFormatter: (v, p) => p.seriesName.includes('环比') ? (v == null ? '-' : v + '%') : (v == null ? '-' : v + 'T')
-    },
-    legend: { data: ['国产调用量（T）', '周环比'], top: 4, right: 8, icon: 'roundRect',
+    grid: { left: 52, right: 58, top: 44, bottom: 64 },
+    tooltip: makeTooltip(function (params) {
+      const date = params[0].axisValueLabel || params[0].name;
+      const tot = params.find(p => p.seriesName.includes('调用量')) || {};
+      const wow = params.find(p => p.seriesName.includes('环比')) || {};
+      return `<div style="font-weight:600;margin-bottom:6px">${date}</div>
+              <div style="color:${PALETTE.gray}">国产调用量：<b style="color:${PALETTE.ink}">${tot.value == null ? '-' : tot.value + ' T'}</b></div>
+              <div style="color:${PALETTE.gray}">周环比：<b style="color:${wow.value >= 0 ? PALETTE.orange : PALETTE.gray}">${wow.value == null ? '-' : (wow.value >= 0 ? '+' : '') + wow.value + '%'}</b></div>`;
+    }),
+    legend: { data: ['国产调用量（T）', '周环比'], top: 6, right: 12, icon: 'roundRect',
               itemWidth: 12, itemHeight: 8, textStyle: CHART_TEXT },
     xAxis: { type: 'category', data: dom.dates,
              axisLine: { lineStyle: { color: PALETTE.line } }, axisTick: { show: false },
-             axisLabel: { ...CHART_TEXT, fontSize: 11, rotate: 35, hideOverlap: true } },
+             axisLabel: { ...CHART_TEXT, fontSize: 11, rotate: 35, hideOverlap: true },
+             axisPointer: { type: 'shadow' } },
     yAxis: [
-      { type: 'value', name: 'T', nameTextStyle: { ...CHART_TEXT, fontSize: 11 },
+      { type: 'value', name: '调用量 (T)',
+        nameTextStyle: { ...CHART_TEXT, fontSize: 11, padding: [0, 0, 0, -20] },
         splitLine: SPLIT_LINE, axisLabel: { ...CHART_TEXT, fontSize: 11 } },
-      { type: 'value', name: '%', nameTextStyle: { ...CHART_TEXT, fontSize: 11 },
-        splitLine: { show: false }, axisLabel: { ...CHART_TEXT, fontSize: 11, formatter: '{value}%' } }
+      { type: 'value',
+        nameTextStyle: { ...CHART_TEXT, fontSize: 11 },
+        splitLine: { show: false },
+        axisLabel: { ...CHART_TEXT, fontSize: 11, formatter: '{value}%' } }
     ],
     series: [
       { name: '国产调用量（T）', type: 'bar', data: dom.total_T, barWidth: '60%',
@@ -287,13 +315,17 @@ function renderChartShare(dom) {
   const chart = echarts.init(el);
   charts.push(chart);
   chart.setOption({
-    grid: { left: 48, right: 28, top: 40, bottom: 60 },
-    tooltip: { trigger: 'axis', backgroundColor: '#fff', borderColor: '#eee',
-               textStyle: { color: PALETTE.ink },
-               valueFormatter: v => v == null ? '-' : v + '%' },
+    grid: { left: 52, right: 30, top: 30, bottom: 64 },
+    tooltip: makeTooltip(function (params) {
+      const date = params[0].axisValueLabel || params[0].name;
+      const v = params[0].value;
+      return `<div style="font-weight:600;margin-bottom:6px">${date}</div>
+              <div style="color:${PALETTE.gray}">国产份额：<b style="color:${PALETTE.orange}">${v == null ? '-' : v + '%'}</b></div>`;
+    }),
     xAxis: { type: 'category', data: dom.dates,
              axisLine: { lineStyle: { color: PALETTE.line } }, axisTick: { show: false },
-             axisLabel: { ...CHART_TEXT, fontSize: 11, rotate: 35, hideOverlap: true } },
+             axisLabel: { ...CHART_TEXT, fontSize: 11, rotate: 35, hideOverlap: true },
+             axisPointer: { type: 'shadow' } },
     yAxis: { type: 'value', axisLabel: { ...CHART_TEXT, fontSize: 11, formatter: '{value}%' },
              splitLine: SPLIT_LINE, max: 70 },
     series: [{
@@ -333,12 +365,18 @@ function renderModelGrid(dom) {
     const color = PALETTE.modelColors[i % PALETTE.modelColors.length];
     const md = dom.models[m];
     chart.setOption({
-      grid: { left: 40, right: 40, top: 16, bottom: 36 },
-      tooltip: { trigger: 'axis', backgroundColor: '#fff', borderColor: '#eee',
-                 textStyle: { color: PALETTE.ink },
-                 valueFormatter: (v, p) => p.seriesName.includes('环比') ? (v == null ? '-' : v + '%') : (v == null ? '-' : v + 'T') },
+      grid: { left: 44, right: 44, top: 16, bottom: 36 },
+      tooltip: makeTooltip(function (params) {
+        const date = params[0].axisValueLabel || params[0].name;
+        const val = params.find(p => p.seriesName.includes('（T）')) || {};
+        const wow = params.find(p => p.seriesName === '环比') || {};
+        return `<div style="font-weight:600;margin-bottom:4px">${escapeHtml(m)} · ${date}</div>
+                <div style="color:${PALETTE.gray}">调用量：<b style="color:${PALETTE.ink}">${val.value == null ? '-' : val.value + ' T'}</b></div>
+                <div style="color:${PALETTE.gray}">环比：<b style="color:${wow.value >= 0 ? PALETTE.orange : PALETTE.gray}">${wow.value == null ? '-' : (wow.value >= 0 ? '+' : '') + wow.value + '%'}</b></div>`;
+      }),
       xAxis: { type: 'category', data: dom.dates, axisLine: { lineStyle: { color: PALETTE.line } },
-               axisTick: { show: false }, axisLabel: { show: false } },
+               axisTick: { show: false }, axisLabel: { show: false },
+               axisPointer: { type: 'shadow' } },
       yAxis: [
         { type: 'value', splitLine: { lineStyle: { color: '#f4f4f4' } },
           axisLabel: { ...CHART_TEXT, fontSize: 10 } },
