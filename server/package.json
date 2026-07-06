@@ -1,0 +1,13 @@
+{
+  "name": "token-dashboard-server",
+  "version": "1.0.0",
+  "description": "Firebase 代理后端，供国内访问",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {},
+  "engines": {
+    "node": ">=18"
+  }
+}

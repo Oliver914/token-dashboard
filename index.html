@@ -5,9 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>AI模型 Tokens 消耗数据库 · 天风计算机</title>
   <meta name="description" content="天风计算机 · AI模型 Tokens 出海消耗周度看板" />
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="css/style.css" />
 </head>
 <body>
@@ -136,20 +133,18 @@
 
   </main>
 
-  <!-- Firebase（仅在配置后生效；未配置时自动降级到本地存储，无需移除） -->
-  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+  <!-- 第三方库（全部本地化，避免国内 CDN 访问问题） -->
+  <script src="vendor/firebase-app-compat.js"></script>
+  <script src="vendor/firebase-database-compat.js"></script>
+  <script src="vendor/firebase-auth-compat.js"></script>
+  <script src="vendor/xlsx.full.min.js"></script>
+  <script src="vendor/echarts.min.js"></script>
 
   <!-- 项目脚本（顺序重要：配置 → 数据层 → 业务） -->
   <script src="js/firebase-config.js"></script>
   <script src="js/models-config.js"></script>
   <script src="js/data-store.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="js/export-excel.js"></script>
-
-  <!-- ECharts（离线可备用本地副本，默认走 CDN） -->
-  <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
   <script src="js/dashboard.js"></script>
 </body>
 </html>

@@ -3,51 +3,84 @@
    =========================================================
    对外暴露：
      DataStore.init()         初始化（异步）
-     DataStore.load()         读取全部数据（返回完整 content+charts 对象）
+     DataStore.load()         读取全部数据
      DataStore.save(content)  保存内容（看板文字/KPI/模块/排名/页脚）
      DataStore.saveCharts(charts)  保存图表数据
      DataStore.onChange(cb)   数据变化时回调（看板实时刷新用）
-     DataStore.isConfigured() 是否接入了真实 Firebase
+     DataStore.isConfigured() 是否接入了真实后端
 
-   后端优先级：
-     1. 真实 Firebase（配置好后）
-     2. localStorage 本地存储（mock 模式，用于无 Firebase 时预览/编辑）
+   三种模式（自动选择）：
+     1. PROXY 模式：运行在自部署服务器（如 token.xxx.com），走 /api/*
+        - 国内可访问，后端转发 Firebase
+     2. FIREBASE 模式：直连 Firebase（github.io 部署时用，需能访问 Google）
+     3. LOCAL 模式：localStorage 兜底（本地预览/编辑，无后端）
    --------------------------------------------------------- */
 
 const DataStore = (() => {
-  let db = null;          // firebase.database 实例
-  let auth = null;        // firebase.auth
+  let db = null, auth = null;
   let firebaseReady = false;
+  let proxyReady = false;
   let listeners = [];
-  let cache = null;       // 内存缓存
+  let cache = null;
+  let authToken = null;       // 代理模式登录 token
 
   const LS_KEY = 'token_dashboard_data_v1';
+  const AUTH_KEY = 'token_admin_token';
+  const VIEW_KEY = 'view_authed';
+
+  // 判断是否运行在自部署服务器（启用代理模式）
+  // 规则：非 localhost、非 github.io、非 file://，且 /api/health 可达
+  function detectProxyMode() {
+    const h = location.hostname;
+    if (!h || h === 'localhost' || h === '127.0.0.1' || h.endsWith('.github.io') || location.protocol === 'file:') {
+      return false;
+    }
+    return true; // 自部署域名，尝试代理模式
+  }
+  const PROXY_CANDIDATE = detectProxyMode();
 
   /* ---------- 初始化 ---------- */
   async function init() {
+    // 优先尝试 PROXY 模式（自部署服务器）
+    if (PROXY_CANDIDATE) {
+      try {
+        const r = await fetch('/api/health');
+        if (r.ok) {
+          proxyReady = true;
+          return 'proxy';
+        }
+      } catch (e) {
+        console.warn('代理后端不可达，回退到其他模式');
+      }
+    }
+    // 其次 FIREBASE 模式
     if (FIREBASE_CONFIGURED && window.firebase) {
       try {
         firebase.initializeApp(FIREBASE_CONFIG);
         db = firebase.database();
         auth = firebase.auth();
         firebaseReady = true;
-        // 监听数据变化
         db.ref('/').on('value', snap => {
           cache = flattenCloudData(snap.val() || {});
           listeners.forEach(cb => cb(cache));
         });
-        return true;
+        return 'firebase';
       } catch (e) {
-        console.warn('Firebase 初始化失败，回退到本地存储：', e);
+        console.warn('Firebase 初始化失败：', e);
         firebaseReady = false;
       }
     }
-    // 本地 mock 模式
+    // 最后 LOCAL 模式
     cache = loadLocal();
-    return false;
+    return 'local';
   }
 
-  function isConfigured() { return firebaseReady; }
+  function isConfigured() { return proxyReady || firebaseReady; }
+  function getMode() {
+    if (proxyReady) return 'proxy';
+    if (firebaseReady) return 'firebase';
+    return 'local';
+  }
 
   /* ---------- localStorage 兜底 ---------- */
   function loadLocal() {
@@ -63,20 +96,24 @@ const DataStore = (() => {
 
   /* ---------- 读取 ---------- */
   async function load() {
+    if (proxyReady) {
+      const r = await fetch('/api/data');
+      const d = await r.json();
+      cache = flattenCloudData(d || {});
+      return cache;
+    }
     if (firebaseReady) {
       const snap = await db.ref('/').get();
       cache = flattenCloudData(snap.val() || {});
       return cache;
     }
-    // 本地：先 localStorage，没有则 fetch data.json（首次访问）
+    // 本地
     if (cache) return cache;
     const local = loadLocal();
     if (local) { cache = local; return local; }
     try {
       const res = await fetch('data.json?v=' + Date.now());
-      cache = await res.json();
-      // 写入标准结构（保证 save 字段齐全）
-      cache = normalizeStructure(cache);
+      cache = normalizeStructure(await res.json());
       saveLocal(cache);
       return cache;
     } catch (e) {
@@ -84,20 +121,13 @@ const DataStore = (() => {
     }
   }
 
-  /* ---------- 结构归一化 ----------
-     Firebase 存的是嵌套结构 {content:{...}, charts:{...}, settings:{...}}，
-     前端期望扁平结构 {title, summary, kpi, ..., total_history, domestic, settings}。
-     本函数把云端数据摊平成前端可用的形式。data.json 已是扁平的，原样返回。
-  --------------------------------------------------------- */
+  /* ---------- 结构归一化 ---------- */
   function flattenCloudData(d) {
     if (!d) return normalizeStructure({});
-    // 如果根级就有 title（data.json 扁平结构），直接返回
     if (d.title || d.summary || d.kpi) return d;
-    // 否则是云端嵌套结构，把 content 摊到根级
     const content = d.content || {};
     return {
       ...content,
-      charts: d.charts,
       total_history: d.charts && d.charts.total_history,
       domestic: d.charts && d.charts.domestic,
       settings: d.settings || { updated_at: nowStr() },
@@ -109,15 +139,17 @@ const DataStore = (() => {
   async function save(content) {
     if (!cache) cache = {};
     cache = { ...cache, ...content, settings: { ...(cache.settings||{}), updated_at: nowStr() } };
-    if (firebaseReady) {
-      // 把扁平字段重新打包成 content 节点写入云端
-      const contentNode = {
-        title: cache.title, summary: cache.summary, kpi: cache.kpi,
-        modules: cache.modules, top10: cache.top10, footer: cache.footer, meta: cache.meta
-      };
+    const contentNode = {
+      title: cache.title, summary: cache.summary, kpi: cache.kpi,
+      modules: cache.modules, top10: cache.top10, footer: cache.footer, meta: cache.meta
+    };
+    if (proxyReady) {
+      await apiFetch('/api/content', 'PUT', contentNode);
+      cache.content = contentNode;
+    } else if (firebaseReady) {
       await db.ref('content').set(contentNode);
       await db.ref('settings').set(cache.settings);
-      cache.content = contentNode; // 同步内存，避免下次 flatten 出错
+      cache.content = contentNode;
     } else {
       saveLocal(cache);
       listeners.forEach(cb => cb(cache));
@@ -127,8 +159,9 @@ const DataStore = (() => {
   async function saveCharts(charts) {
     if (!cache) cache = {};
     cache = { ...cache, charts, settings: { ...(cache.settings||{}), updated_at: nowStr() } };
-    if (firebaseReady) {
-      // Firebase 数组会丢弃前导 null，推送前把数值数组里的 null 转成 0
+    if (proxyReady) {
+      await apiFetch('/api/charts', 'PUT', charts);
+    } else if (firebaseReady) {
       await db.ref('charts').set(sanitizeForFirebase(charts));
       await db.ref('settings').set(cache.settings);
     } else {
@@ -137,8 +170,22 @@ const DataStore = (() => {
     }
   }
 
-  // Firebase 数组特性：前导 null 会被丢弃导致数组错位。
-  // 推送前把数值数组里的 null 转成 0（柱状图里 0 高度 = 视觉无数据）。
+  // PROXY 模式的 fetch 封装（带 auth token）
+  async function apiFetch(path, method, body) {
+    const headers = { 'Content-Type': 'application/json' };
+    if (authToken) headers['Authorization'] = 'Bearer ' + authToken;
+    const r = await fetch(path, {
+      method, headers,
+      body: body ? JSON.stringify(body) : undefined
+    });
+    if (!r.ok) {
+      const e = await r.json().catch(() => ({ error: r.statusText }));
+      throw new Error(e.error || ('HTTP ' + r.status));
+    }
+    return r.json();
+  }
+
+  // Firebase 数组 null→0 处理
   function sanitizeForFirebase(obj) {
     if (Array.isArray(obj)) {
       const isNumeric = obj.some(v => typeof v === 'number');
@@ -157,35 +204,106 @@ const DataStore = (() => {
     listeners.push(cb);
     if (cache) cb(cache);
   }
-
-  /* ---------- 登录（仅 Firebase 模式） ---------- */
-  async function signIn(email, password) {
-    if (!firebaseReady) {
-      // mock：固定 admin/admin
-      if (email === 'admin' && password === 'admin') {
-        sessionStorage.setItem('mock_admin', '1');
-        return true;
-      }
-      throw new Error('账号或密码错误');
+  // PROXY 模式定期轮询（无实时推送，5 秒一次平衡实时性和负载）
+  setInterval(async () => {
+    if (proxyReady && listeners.length > 0) {
+      try {
+        const r = await fetch('/api/data');
+        const d = await r.json();
+        const newData = flattenCloudData(d || {});
+        // 简单判断数据变化（更新时间戳）
+        const newTs = newData.settings && newData.settings.updated_at;
+        const oldTs = cache && cache.settings && cache.settings.updated_at;
+        if (newTs !== oldTs) {
+          cache = newData;
+          listeners.forEach(cb => cb(cache));
+        }
+      } catch (e) {}
     }
-    await auth.signInWithEmailAndPassword(email, password);
-    return true;
+  }, 5000);
+
+  /* ---------- 登录 ---------- */
+  async function signIn(email, password) {
+    if (proxyReady) {
+      const r = await fetch('/api/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password })
+      });
+      const data = await r.json();
+      if (!r.ok || data.error) throw new Error(data.error && data.error.message || '登录失败');
+      authToken = data.idToken;
+      localStorage.setItem(AUTH_KEY, authToken);
+      return true;
+    }
+    if (firebaseReady) {
+      await auth.signInWithEmailAndPassword(email, password);
+      return true;
+    }
+    // 本地 mock
+    if (email === 'admin' && password === 'admin') {
+      sessionStorage.setItem('mock_admin', '1');
+      return true;
+    }
+    throw new Error('账号或密码错误');
   }
+
   function signOut() {
     if (firebaseReady) auth.signOut();
+    authToken = null;
+    localStorage.removeItem(AUTH_KEY);
     sessionStorage.removeItem('mock_admin');
   }
+
   function onAuth(cb) {
+    if (proxyReady) {
+      // 恢复已保存的 token
+      const saved = localStorage.getItem(AUTH_KEY);
+      if (saved) {
+        authToken = saved;
+        // 验证 token 是否有效（通过读取一个需登录的接口）
+        apiFetch('/api/settings', 'PATCH', { _check: 1 }).then(() => cb({ email: 'admin' }))
+          .catch(() => { authToken = null; localStorage.removeItem(AUTH_KEY); cb(null); });
+      } else {
+        cb(null);
+      }
+      return;
+    }
     if (firebaseReady) {
       auth.onAuthStateChanged(cb);
     } else {
       cb(sessionStorage.getItem('mock_admin') === '1' ? { email: 'admin' } : null);
     }
   }
+
   async function changePassword(newPwd) {
-    if (!firebaseReady) { sessionStorage.setItem('mock_admin','1'); return true; }
-    const user = auth.currentUser;
-    if (user) await user.updatePassword(newPwd);
+    // PROXY/Firebase 模式都用 Firebase Auth 的更新接口（这里简化，提示用控制台改）
+    throw new Error('请在 Firebase 控制台修改密码，或联系管理员');
+  }
+
+  /* ---------- 看板访问密码（仅读取 settings.view_password）---------- */
+  function getViewPassword() {
+    return (cache && cache.settings && cache.settings.view_password) || '';
+  }
+  function checkViewPassword(pwd) { return pwd === getViewPassword(); }
+  function authView(pwd) {
+    if (checkViewPassword(pwd)) { sessionStorage.setItem(VIEW_KEY, '1'); return true; }
+    return false;
+  }
+  function isViewAuthed() { return sessionStorage.getItem(VIEW_KEY) === '1'; }
+  function clearViewAuth() { sessionStorage.removeItem(VIEW_KEY); }
+  async function setViewPassword(newPwd) {
+    if (!cache) cache = await load();
+    if (!cache.settings) cache.settings = {};
+    cache.settings.view_password = newPwd;
+    cache.settings.updated_at = nowStr();
+    if (proxyReady) {
+      await apiFetch('/api/settings', 'PATCH', { view_password: newPwd, updated_at: cache.settings.updated_at });
+    } else if (firebaseReady) {
+      await db.ref('settings/view_password').set(newPwd);
+    } else {
+      saveLocal(cache);
+    }
   }
 
   /* ---------- 工具 ---------- */
@@ -195,11 +313,9 @@ const DataStore = (() => {
     return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
   }
 
-  // 把任意输入规整成标准结构（保证所有字段存在，避免渲染时 undefined）
   function normalizeStructure(d) {
     d = d || {};
     const sumRaw = d.summary || [];
-    // summary 支持两种格式：纯字符串数组 / 对象数组 {text,color,bold}
     const summary = sumRaw.map(s => {
       if (typeof s === 'string') return { text: s, color: '', bold: false };
       return { text: s.text || '', color: s.color || '', bold: !!s.bold };
@@ -229,40 +345,10 @@ const DataStore = (() => {
     };
   }
 
-  /* ---------- 看板访问密码（独立于管理员登录）---------- */
-  const VIEW_PWD_KEY = 'view_authed';
-  function getViewPassword() {
-    // 只认云端配置的密码；未配置时返回空（看板会进入「请联系管理员」状态，不会用默认密码放行）
-    return (cache && cache.settings && cache.settings.view_password) || '';
-  }
-  function checkViewPassword(pwd) {
-    return pwd === getViewPassword();
-  }
-  function authView(pwd) {
-    if (checkViewPassword(pwd)) { sessionStorage.setItem(VIEW_PWD_KEY, '1'); return true; }
-    return false;
-  }
-  function isViewAuthed() {
-    return sessionStorage.getItem(VIEW_PWD_KEY) === '1';
-  }
-  function clearViewAuth() { sessionStorage.removeItem(VIEW_PWD_KEY); }
-  async function setViewPassword(newPwd) {
-    if (!cache) cache = await load();
-    if (!cache.settings) cache.settings = {};
-    cache.settings.view_password = newPwd;
-    cache.settings.updated_at = nowStr();
-    if (firebaseReady) {
-      await db.ref('settings/view_password').set(newPwd);
-    } else {
-      saveLocal(cache);
-    }
-  }
-
   return {
     init, load, save, saveCharts, onChange,
-    isConfigured, signIn, signOut, onAuth, changePassword,
-    normalizeStructure,
-    // 看板访问密码
-    getViewPassword, checkViewPassword, authView, isViewAuthed, clearViewAuth, setViewPassword
+    isConfigured, getMode, signIn, signOut, onAuth, changePassword,
+    getViewPassword, checkViewPassword, authView, isViewAuthed, clearViewAuth, setViewPassword,
+    normalizeStructure
   };
 })();
