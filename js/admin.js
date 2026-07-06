@@ -969,7 +969,7 @@ function buildSnapshotHTML(d) {
       <div class="sk-logo">T</div>
       <div>
         <div class="sk-title">${escapeHtmlSnap((d.title||'').replace(/【.+?】/,'').trim()||'AI模型 Tokens 消耗数据库')}</div>
-        <div class="sk-team">${escapeHtmlSnap((d.title||'').match(/【(.+?)】/)?.[1] || '天风计算机')}</div>
+        <div class="sk-team">${escapeHtmlSnap((d.title||'').match(/【(.+?)】/)?.[1] || '研究团队')}</div>
       </div>
     </div>
     <div class="sk-section">

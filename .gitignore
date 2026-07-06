@@ -15,3 +15,7 @@ __pycache__/
 # 本地解密的临时 Excel（update.py 解密后只在内存中处理，这里仅作保护）
 *.tmp.xlsx
 /tmp/*.xlsx
+
+# 数据文件含真实团队/业务信息，不入仓库（数据从 Firebase 读取）
+data.json
+data-*.json

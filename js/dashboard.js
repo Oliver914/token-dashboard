@@ -70,20 +70,36 @@ async function bootDashboard() {
 
 // 显示看板访问密码门
 function showViewGate() {
+  // 团队名从已加载的数据读取（init 时已 load），无数据则用通用占位符
+  const cached = DataStore.normalizeStructure({});
+  let teamLine = '【研究团队】';  // 通用占位，仓库里不暴露真实团队名
+  let noteLine = '密码请询问团队成员或对口销售';
+  try {
+    // DataStore 内部 cache 可通过 load 拿到，这里尝试读 title
+    DataStore.load().then(d => {
+      if (d && d.title) {
+        const m = d.title.match(/【(.+?)】/);
+        if (m) {
+          document.getElementById('gateTeam').textContent = '【' + m[1] + '】';
+        }
+      }
+    });
+  } catch (e) {}
+
   const gate = document.createElement('div');
   gate.id = 'viewGate';
   gate.innerHTML = `
     <div class="gate-card">
       <div class="logo-mark"><span class="logo-dot"></span><span class="logo-text">T</span></div>
       <h1 class="gate-title">Token 出海数据库</h1>
-      <p class="gate-team">【天风计算机 缪欣君/刘鉴团队】</p>
+      <p class="gate-team" id="gateTeam">${teamLine}</p>
       <p class="gate-sub">请输入访问密码</p>
       <form id="gateForm" class="gate-form">
         <input type="password" id="gatePwd" placeholder="访问密码" autocomplete="off" autofocus />
         <div id="gateError" class="gate-error"></div>
         <button type="submit" class="btn btn-primary btn-block">进 入</button>
       </form>
-      <p class="gate-note">密码请询问天风计算机团队成员或对口销售</p>
+      <p class="gate-note">${noteLine}</p>
     </div>`;
   document.body.appendChild(gate);
   document.getElementById('gateForm').addEventListener('submit', (e) => {
@@ -92,7 +108,6 @@ function showViewGate() {
     const err = document.getElementById('gateError');
     err.textContent = '';
     if (DataStore.authView(pwd)) {
-      // 移除密码门，显示看板
       gate.remove();
       document.querySelector('.container').style.display = '';
       bootDashboard();
@@ -127,8 +142,8 @@ function renderHero(d) {
   const fullTitle = (d.title || '').trim();
   const teamMatch = fullTitle.match(/【(.+?)】/);
   const mainTitle = fullTitle.replace(/【.+?】/, '').trim() || 'AI模型 Tokens 消耗数据库';
-  // 括号里本身已含"天风计算机"，直接用；没有则回退默认
-  const team = teamMatch ? teamMatch[1] : '天风计算机';
+  // 团队名从 title 的【】里提取；没有则用通用占位（不在源码里暴露真实团队名）
+  const team = teamMatch ? teamMatch[1] : '研究团队';
   document.getElementById('pageTitle').textContent = mainTitle;
   document.getElementById('pageSub').textContent = team;
 
