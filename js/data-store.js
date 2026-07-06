@@ -47,6 +47,8 @@ const DataStore = (() => {
         const r = await fetch('/api/health');
         if (r.ok) {
           proxyReady = true;
+          // 关键：立即拉取数据填充 cache，否则密码门读不到 view_password
+          await load();
           return 'proxy';
         }
       } catch (e) {
