@@ -111,6 +111,19 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
+    // ---- 登录接口（必须在 token 验证之前放行，否则永远登不进）----
+    if (path === '/api/login' && req.method === 'POST') {
+      const body = await readBody();
+      const { email, password } = JSON.parse(body || '{}');
+      const r = await fetchHttps(`${FB.authUrl}/accounts:signInWithPassword?key=${FB.apiKey}`, {
+        method: 'POST',
+        body: JSON.stringify({ email, password, returnSecureToken: true })
+      });
+      res.writeHead(r.status, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(r.body));
+      return;
+    }
+
     // ---- 以下接口需登录 ----
     if (path.startsWith('/api/') && ['PUT', 'PATCH', 'POST'].includes(req.method)) {
       const user = await verifyToken(idToken);
@@ -121,18 +134,6 @@ const server = http.createServer(async (req, res) => {
       }
 
       const body = await readBody();
-
-      // 登录接口（特殊：不需要预登录，前端用账号密码换 token）
-      if (path === '/api/login' && req.method === 'POST') {
-        const { email, password } = JSON.parse(body || '{}');
-        const r = await fetchHttps(`${FB.authUrl}/accounts:signInWithPassword?key=${FB.apiKey}`, {
-          method: 'POST',
-          body: JSON.stringify({ email, password, returnSecureToken: true })
-        });
-        res.writeHead(r.status, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify(r.body));
-        return;
-      }
 
       // 写 content（覆盖）
       if (path === '/api/content' && req.method === 'PUT') {
