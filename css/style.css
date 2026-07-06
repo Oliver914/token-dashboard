@@ -29,10 +29,17 @@
 
 * { box-sizing: border-box; }
 
+/* 防止任何元素撑破视口导致横向滚动（手机端体验关键） */
 html, body {
   margin: 0;
   padding: 0;
+  max-width: 100%;
+  overflow-x: hidden;
+  /* iOS Safari 橡皮筋效果 + 缩放抖动修复 */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
+body { width: 100%; }
 
 body {
   font-family: 'Inter', 'PingFang SC', 'Microsoft YaHei', 'Helvetica Neue', Arial, sans-serif;
@@ -554,4 +561,32 @@ body {
 
 /* 防止 ECharts 在小屏 tooltip 溢出 */
 .chart { min-width: 0; }
+
+/* =========================================================
+   手机端防溢出强化（处理两边对称溢出/需缩小才能贴合的问题）
+   重点：约束图表容器、ECharts canvas、长文本不换行
+   ========================================================= */
+@media (max-width: 980px) {
+  /* 所有图表容器/canvas 强制不超出 */
+  .chart-wrap, .chart, #modelGrid, .chart-grid,
+  .chart-wrap > div, .chart-wrap > div > div {
+    max-width: 100%;
+    min-width: 0;
+  }
+  canvas { max-width: 100%; }
+
+  /* 长英文/URL 不撑破（总结段落、页脚） */
+  .summary-body, .footer-text, .footer-meta, .module-comment, .hero-sub {
+    overflow-wrap: break-word;
+    word-break: break-word;
+  }
+
+  /* 模块/卡片容器不溢出 */
+  .module, .summary-card, .kpi-card, .rank-card, .footer, .hero {
+    max-width: 100%;
+  }
+
+  /* ECharts tooltip 出现时不要撑大页面（强制固定定位） */
+  .chart-wrap { position: relative; overflow: hidden; }
+}
 
