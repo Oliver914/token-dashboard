@@ -177,7 +177,7 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-server.listen(PORT, '127.0.0.1', () => {
-  console.log(`✓ Token 看板代理服务运行中: http://127.0.0.1:${PORT}`);
+server.listen(PORT, '0.0.0.0', () => {
+  console.log(`✓ Token 看板代理服务运行中: http://0.0.0.0:${PORT}`);
   console.log(`  Firebase: ${FB.databaseURL}`);
 });
