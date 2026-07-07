@@ -9,5 +9,7 @@
   "dependencies": {},
   "engines": {
     "node": ">=18"
-  }
+  },
+  "author": "",
+  "license": "MIT"
 }
