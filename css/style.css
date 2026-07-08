@@ -222,6 +222,29 @@ body {
 }
 .gate-form input:focus { border-color: var(--orange); box-shadow: 0 0 0 3px rgba(237,125,49,.12); }
 .gate-error { color: #e74c3c; font-size: 12.5px; min-height: 18px; margin: 8px 0 12px; text-align: center; }
+.gate-form .btn {
+  display: block;
+  width: 100%;
+  padding: 12px 16px;
+  font-size: 15px;
+  font-weight: 600;
+  font-family: inherit;
+  letter-spacing: 4px;
+  text-indent: 4px;
+  color: #fff;
+  background: linear-gradient(135deg, var(--orange) 0%, #f59e57 100%);
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all .2s ease;
+  box-shadow: 0 6px 18px rgba(237,125,49,.28);
+}
+.gate-form .btn:hover {
+  filter: brightness(1.05);
+  box-shadow: 0 8px 24px rgba(237,125,49,.36);
+  transform: translateY(-1px);
+}
+.gate-form .btn:active { transform: scale(.985); }
 .gate-note { font-size: 12px; color: var(--gray-2); margin: 18px 0 0; line-height: 1.6; }
 
 /* ---------- 通用模块卡片 ---------- */
