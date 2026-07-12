@@ -135,9 +135,9 @@ const server = http.createServer(async (req, res) => {
 
       const body = await readBody();
 
-      // 写 content（覆盖）
+      // 写 content（覆盖）—— 必须带 idToken，否则 Firebase 规则拒绝
       if (path === '/api/content' && req.method === 'PUT') {
-        const r = await fetchHttps(`${FB.databaseURL}/content.json`, {
+        const r = await fetchHttps(`${FB.databaseURL}/content.json?auth=${idToken}`, {
           method: 'PUT', body
         });
         res.writeHead(r.status, { 'Content-Type': 'application/json' });
@@ -149,7 +149,7 @@ const server = http.createServer(async (req, res) => {
       if (path === '/api/charts' && req.method === 'PUT') {
         const data = JSON.parse(body || '{}');
         const clean = sanitizeForFirebase(data);
-        const r = await fetchHttps(`${FB.databaseURL}/charts.json`, {
+        const r = await fetchHttps(`${FB.databaseURL}/charts.json?auth=${idToken}`, {
           method: 'PUT', body: JSON.stringify(clean)
         });
         res.writeHead(r.status, { 'Content-Type': 'application/json' });
@@ -159,7 +159,7 @@ const server = http.createServer(async (req, res) => {
 
       // 合并写 settings
       if (path === '/api/settings' && req.method === 'PATCH') {
-        const r = await fetchHttps(`${FB.databaseURL}/settings.json`, {
+        const r = await fetchHttps(`${FB.databaseURL}/settings.json?auth=${idToken}`, {
           method: 'PATCH', body
         });
         res.writeHead(r.status, { 'Content-Type': 'application/json' });
